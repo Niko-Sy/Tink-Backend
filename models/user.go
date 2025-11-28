@@ -5,9 +5,8 @@ import "time"
 type User struct {
 	UserId            string    `json:"userId"`                      // 用户ID（U+9位数字）
 	Password          string    `json:"password"`                    // 密码（加密存储）
-	Username          string    `json:"username"`                    // 用户名（唯一）
+	Username          string    `json:"username"`                    // 用户名
 	Nickname          string    `json:"nickname,omitempty"`          // 昵称
-	Name              string    `json:"name"`                        // 显示名称
 	Avatar            string    `json:"avatar"`                      // 头像URL
 	Email             string    `json:"email,omitempty"`             // 邮箱
 	Phone             string    `json:"phone,omitempty"`             // 手机号
@@ -23,7 +22,7 @@ type User struct {
 
 type UserInfo struct {
 	UserId           string `json:"userId"`                     // 用户ID（U+9位数字）
-	Username         string `json:"username"`                   // 用户名（唯一）
+	Username         string `json:"username"`                   // 用户名
 	Nickname         string `json:"nickname,omitempty"`         // 昵称
 	Avatar           string `json:"avatar"`                     // 头像URL
 	Email            string `json:"email,omitempty"`            // 邮箱
