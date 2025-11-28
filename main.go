@@ -17,8 +17,8 @@ func main() {
 		{
 			authGroup.POST("/login", authentic.HandleLogin)
 			authGroup.POST("/register", authentic.HandleRegister)
-			authGroup.POST("/logout", authentic.HandleLogout)
-			authGroup.POST("/refresh", authentic.HandleRefresh)
+			authGroup.GET("/logout", authentic.HandleLogout)
+			authGroup.GET("/refresh", authentic.HandleRefresh)
 			authGroup.POST("/changepwd", authentic.HandleChangePassword)
 			authGroup.GET("/userinfo", authentic.HandleGetUserInfo)
 			authGroup.POST("/updateuserinfo", authentic.HandleUpdateUserInfo)
