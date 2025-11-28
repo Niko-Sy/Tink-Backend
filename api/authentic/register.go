@@ -2,6 +2,7 @@ package authentic
 
 import (
 	"chatroombackend/models"
+	"chatroombackend/utils"
 	"net/http"
 	"time"
 
@@ -22,7 +23,7 @@ func HandleRegister(c *gin.Context) {
 	}
 
 	user := models.User{
-		UserId:        "U123456789",
+		UserId:        utils.GenerateUserID(),
 		Username:      registerReq.Username,
 		Nickname:      registerReq.Nickname,
 		Avatar:        "https://example.com/avatar.jpg",

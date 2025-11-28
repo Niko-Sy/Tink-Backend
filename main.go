@@ -2,6 +2,8 @@ package main
 
 import (
 	"chatroombackend/api/authentic"
+	"chatroombackend/api/chatroom"
+	"chatroombackend/models"
 
 	"github.com/gin-gonic/gin"
 )
@@ -22,6 +24,14 @@ func main() {
 			authGroup.POST("/changepwd", authentic.HandleChangePassword)
 			authGroup.GET("/userinfo", authentic.HandleGetUserInfo)
 			authGroup.POST("/updateuserinfo", authentic.HandleUpdateUserInfo)
+		}
+		chatroomGroup := apiV1.Group("/chatroom")
+		{
+			chatroomGroup.GET("/getroomlist", chatroom.HandleGetRoomList)
+			chatroomGroup.POST("/createroom", chatroom.HandleCreateRoom)
+			chatroomGroup.POST("/joinroom", chatroom.HandleJoinRoom)
+			chatroomGroup.POST("/leaveroom", chatroom.HandleLeaveRoom)
+			chatroomGroup.GET("/:roomid/info", chatroom.HandleGetRoomInfo)
 		}
 	}
 
