@@ -184,14 +184,14 @@ DECLARE
 BEGIN
     next_id := nextval('Message_idSeq');
 
-    NEW.message_id :='M'||LPAD(next_id::text, 5, '0');
+    NEW.message_id :='M'||LPAD(next_id::text, 15, '0');
 
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 
 CREATE TABLE "messages" (
-                            "message_id" varchar(6) PRIMARY KEY ,    -- 消息编号
+                            "message_id" varchar(16) PRIMARY KEY ,    -- 消息编号
                             "sent_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,    -- 发送时间
                             "content" TEXT NOT NULL,                                   -- 消息内容
                             "message_type" message_type NOT NULL DEFAULT 'text',       -- 消息类型

@@ -8,9 +8,95 @@ package sqlcdb
 import (
 	"context"
 	"database/sql"
+	"time"
+
+	"github.com/lib/pq"
 )
 
+const activateUser = `-- name: ActivateUser :exec
+UPDATE users 
+SET account_status = 'active'
+WHERE user_id = $1 AND account_status = 'pending_verification'
+`
+
+// 激活用户账号
+func (q *Queries) ActivateUser(ctx context.Context, userID string) error {
+	_, err := q.exec(ctx, q.activateUserStmt, activateUser, userID)
+	return err
+}
+
+const checkEmailExists = `-- name: CheckEmailExists :one
+SELECT EXISTS(SELECT 1 FROM users WHERE email = $1) AS exists
+`
+
+// 检查邮箱是否已存在
+func (q *Queries) CheckEmailExists(ctx context.Context, email sql.NullString) (bool, error) {
+	row := q.queryRow(ctx, q.checkEmailExistsStmt, checkEmailExists, email)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
+const checkPhoneExists = `-- name: CheckPhoneExists :one
+SELECT EXISTS(SELECT 1 FROM users WHERE phone_number = $1) AS exists
+`
+
+// 检查手机号是否已存在
+func (q *Queries) CheckPhoneExists(ctx context.Context, phoneNumber sql.NullString) (bool, error) {
+	row := q.queryRow(ctx, q.checkPhoneExistsStmt, checkPhoneExists, phoneNumber)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
+const checkUsernameExists = `-- name: CheckUsernameExists :one
+SELECT EXISTS(SELECT 1 FROM users WHERE username = $1) AS exists
+`
+
+// 检查用户名是否已存在
+func (q *Queries) CheckUsernameExists(ctx context.Context, username string) (bool, error) {
+	row := q.queryRow(ctx, q.checkUsernameExistsStmt, checkUsernameExists, username)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
+const countOnlineUsers = `-- name: CountOnlineUsers :one
+SELECT COUNT(*) 
+FROM users 
+WHERE online_status IN ('online', 'away', 'do_not_disturb') AND account_status = 'active'
+`
+
+// 统计在线用户数
+func (q *Queries) CountOnlineUsers(ctx context.Context) (int64, error) {
+	row := q.queryRow(ctx, q.countOnlineUsersStmt, countOnlineUsers)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countSearchUsers = `-- name: CountSearchUsers :one
+SELECT COUNT(*) 
+FROM users 
+WHERE 
+    account_status = 'active'
+    AND (
+        username ILIKE '%' || $1 || '%' 
+        OR nickname ILIKE '%' || $1 || '%'
+    )
+`
+
+// 搜索用户计数
+func (q *Queries) CountSearchUsers(ctx context.Context, dollar_1 sql.NullString) (int64, error) {
+	row := q.queryRow(ctx, q.countSearchUsersStmt, countSearchUsers, dollar_1)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createUser = `-- name: CreateUser :one
+
+
 INSERT INTO users (
     username,
     hashed_password,
@@ -47,6 +133,14 @@ type CreateUserParams struct {
 	Bio            sql.NullString `json:"bio"`
 }
 
+// =============================================
+// 用户相关SQL查询 (User Queries)
+// 对应API: 认证相关接口 + 用户管理接口
+// =============================================
+// =============================================
+// 1. 认证相关 (Authentication)
+// =============================================
+// 用户注册 POST /auth/register
 func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, error) {
 	row := q.queryRow(ctx, q.createUserStmt, createUser,
 		arg.Username,
@@ -57,6 +151,115 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		arg.AvatarUrl,
 		arg.Bio,
 	)
+	var i User
+	err := row.Scan(
+		&i.UserID,
+		&i.Username,
+		&i.HashedPassword,
+		&i.Nickname,
+		&i.PhoneNumber,
+		&i.Email,
+		&i.AvatarUrl,
+		&i.Bio,
+		&i.OnlineStatus,
+		&i.AccountStatus,
+		&i.SystemRole,
+		&i.RegisteredAt,
+		&i.LastLoginAt,
+	)
+	return i, err
+}
+
+const deleteUserAccount = `-- name: DeleteUserAccount :exec
+UPDATE users 
+SET account_status = 'deleted'
+WHERE user_id = $1
+`
+
+// 删除用户账号（软删除）
+func (q *Queries) DeleteUserAccount(ctx context.Context, userID string) error {
+	_, err := q.exec(ctx, q.deleteUserAccountStmt, deleteUserAccount, userID)
+	return err
+}
+
+const getOnlineUsers = `-- name: GetOnlineUsers :many
+SELECT 
+    user_id,
+    username,
+    nickname,
+    avatar_url,
+    online_status
+FROM users 
+WHERE online_status IN ('online', 'away', 'do_not_disturb') AND account_status = 'active'
+ORDER BY last_login_at DESC
+LIMIT $1 OFFSET $2
+`
+
+type GetOnlineUsersParams struct {
+	Limit  int64 `json:"limit"`
+	Offset int64 `json:"offset"`
+}
+
+type GetOnlineUsersRow struct {
+	UserID       string               `json:"user_id"`
+	Username     string               `json:"username"`
+	Nickname     sql.NullString       `json:"nickname"`
+	AvatarUrl    sql.NullString       `json:"avatar_url"`
+	OnlineStatus NullUserOnlineStatus `json:"online_status"`
+}
+
+// 获取在线用户列表
+func (q *Queries) GetOnlineUsers(ctx context.Context, arg GetOnlineUsersParams) ([]GetOnlineUsersRow, error) {
+	rows, err := q.query(ctx, q.getOnlineUsersStmt, getOnlineUsers, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetOnlineUsersRow{}
+	for rows.Next() {
+		var i GetOnlineUsersRow
+		if err := rows.Scan(
+			&i.UserID,
+			&i.Username,
+			&i.Nickname,
+			&i.AvatarUrl,
+			&i.OnlineStatus,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getUserByEmail = `-- name: GetUserByEmail :one
+SELECT 
+    user_id,
+    username,
+    hashed_password,
+    nickname,
+    phone_number,
+    email,
+    avatar_url,
+    bio,
+    online_status,
+    account_status,
+    system_role,
+    registered_at,
+    last_login_at
+FROM users 
+WHERE email = $1
+`
+
+// 用户登录时通过邮箱查找 POST /auth/login
+func (q *Queries) GetUserByEmail(ctx context.Context, email sql.NullString) (User, error) {
+	row := q.queryRow(ctx, q.getUserByEmailStmt, getUserByEmail, email)
 	var i User
 	err := row.Scan(
 		&i.UserID,
@@ -95,6 +298,7 @@ FROM users
 WHERE user_id = $1
 `
 
+// 根据ID获取用户信息 GET /users/:userId
 func (q *Queries) GetUserByID(ctx context.Context, userID string) (User, error) {
 	row := q.queryRow(ctx, q.getUserByIDStmt, getUserByID, userID)
 	var i User
@@ -135,6 +339,7 @@ FROM users
 WHERE username = $1
 `
 
+// 用户登录时通过用户名查找 POST /auth/login
 func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User, error) {
 	row := q.queryRow(ctx, q.getUserByUsernameStmt, getUserByUsername, username)
 	var i User
@@ -156,16 +361,291 @@ func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User,
 	return i, err
 }
 
-const updateUser = `-- name: UpdateUser :one
+const getUserPublicInfo = `-- name: GetUserPublicInfo :one
+SELECT 
+    user_id,
+    username,
+    nickname,
+    avatar_url,
+    bio,
+    online_status,
+    registered_at
+FROM users 
+WHERE user_id = $1 AND account_status = 'active'
+`
+
+type GetUserPublicInfoRow struct {
+	UserID       string               `json:"user_id"`
+	Username     string               `json:"username"`
+	Nickname     sql.NullString       `json:"nickname"`
+	AvatarUrl    sql.NullString       `json:"avatar_url"`
+	Bio          sql.NullString       `json:"bio"`
+	OnlineStatus NullUserOnlineStatus `json:"online_status"`
+	RegisteredAt time.Time            `json:"registered_at"`
+}
+
+// 获取用户公开信息（不含敏感信息）GET /users/:userId
+func (q *Queries) GetUserPublicInfo(ctx context.Context, userID string) (GetUserPublicInfoRow, error) {
+	row := q.queryRow(ctx, q.getUserPublicInfoStmt, getUserPublicInfo, userID)
+	var i GetUserPublicInfoRow
+	err := row.Scan(
+		&i.UserID,
+		&i.Username,
+		&i.Nickname,
+		&i.AvatarUrl,
+		&i.Bio,
+		&i.OnlineStatus,
+		&i.RegisteredAt,
+	)
+	return i, err
+}
+
+const getUserSystemRole = `-- name: GetUserSystemRole :one
+SELECT system_role 
+FROM users 
+WHERE user_id = $1
+`
+
+// 获取用户系统角色
+func (q *Queries) GetUserSystemRole(ctx context.Context, userID string) (NullUserSystemRole, error) {
+	row := q.queryRow(ctx, q.getUserSystemRoleStmt, getUserSystemRole, userID)
+	var system_role NullUserSystemRole
+	err := row.Scan(&system_role)
+	return system_role, err
+}
+
+const getUsersByIDs = `-- name: GetUsersByIDs :many
+
+SELECT 
+    user_id,
+    username,
+    nickname,
+    avatar_url,
+    bio,
+    online_status
+FROM users 
+WHERE user_id = ANY($1::varchar[]) AND account_status = 'active'
+`
+
+type GetUsersByIDsRow struct {
+	UserID       string               `json:"user_id"`
+	Username     string               `json:"username"`
+	Nickname     sql.NullString       `json:"nickname"`
+	AvatarUrl    sql.NullString       `json:"avatar_url"`
+	Bio          sql.NullString       `json:"bio"`
+	OnlineStatus NullUserOnlineStatus `json:"online_status"`
+}
+
+// =============================================
+// 6. 批量查询 (Batch Queries)
+// =============================================
+// 批量获取用户信息
+func (q *Queries) GetUsersByIDs(ctx context.Context, dollar_1 []string) ([]GetUsersByIDsRow, error) {
+	rows, err := q.query(ctx, q.getUsersByIDsStmt, getUsersByIDs, pq.Array(dollar_1))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetUsersByIDsRow{}
+	for rows.Next() {
+		var i GetUsersByIDsRow
+		if err := rows.Scan(
+			&i.UserID,
+			&i.Username,
+			&i.Nickname,
+			&i.AvatarUrl,
+			&i.Bio,
+			&i.OnlineStatus,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const isUserAdmin = `-- name: IsUserAdmin :one
+SELECT EXISTS(
+    SELECT 1 FROM users 
+    WHERE user_id = $1 AND system_role = 'admin'
+) AS is_admin
+`
+
+// 检查用户是否为管理员
+func (q *Queries) IsUserAdmin(ctx context.Context, userID string) (bool, error) {
+	row := q.queryRow(ctx, q.isUserAdminStmt, isUserAdmin, userID)
+	var is_admin bool
+	err := row.Scan(&is_admin)
+	return is_admin, err
+}
+
+const searchUsers = `-- name: SearchUsers :many
+
+SELECT 
+    user_id,
+    username,
+    nickname,
+    avatar_url,
+    bio,
+    online_status
+FROM users 
+WHERE 
+    account_status = 'active'
+    AND (
+        username ILIKE '%' || $1 || '%' 
+        OR nickname ILIKE '%' || $1 || '%'
+    )
+ORDER BY 
+    CASE WHEN username = $1 THEN 0
+         WHEN username ILIKE $1 || '%' THEN 1
+         WHEN nickname = $1 THEN 2
+         WHEN nickname ILIKE $1 || '%' THEN 3
+         ELSE 4
+    END,
+    username
+LIMIT $2 OFFSET $3
+`
+
+type SearchUsersParams struct {
+	Column1 sql.NullString `json:"column_1"`
+	Limit   int64          `json:"limit"`
+	Offset  int64          `json:"offset"`
+}
+
+type SearchUsersRow struct {
+	UserID       string               `json:"user_id"`
+	Username     string               `json:"username"`
+	Nickname     sql.NullString       `json:"nickname"`
+	AvatarUrl    sql.NullString       `json:"avatar_url"`
+	Bio          sql.NullString       `json:"bio"`
+	OnlineStatus NullUserOnlineStatus `json:"online_status"`
+}
+
+// =============================================
+// 4. 用户搜索 (User Search)
+// =============================================
+// 搜索用户 GET /users/search
+func (q *Queries) SearchUsers(ctx context.Context, arg SearchUsersParams) ([]SearchUsersRow, error) {
+	rows, err := q.query(ctx, q.searchUsersStmt, searchUsers, arg.Column1, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []SearchUsersRow{}
+	for rows.Next() {
+		var i SearchUsersRow
+		if err := rows.Scan(
+			&i.UserID,
+			&i.Username,
+			&i.Nickname,
+			&i.AvatarUrl,
+			&i.Bio,
+			&i.OnlineStatus,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const setUserOffline = `-- name: SetUserOffline :exec
+UPDATE users 
+SET online_status = 'offline'
+WHERE user_id = $1
+`
+
+// 设置用户离线（退出登录时调用）
+func (q *Queries) SetUserOffline(ctx context.Context, userID string) error {
+	_, err := q.exec(ctx, q.setUserOfflineStmt, setUserOffline, userID)
+	return err
+}
+
+const setUserOnline = `-- name: SetUserOnline :exec
 UPDATE users 
 SET 
-    nickname = $2,
-    phone_number = $3,
-    email = $4,
-    avatar_url = $5,
-    bio = $6,
-    online_status = $7,
-    last_login_at = $8
+    online_status = 'online',
+    last_login_at = NOW()
+WHERE user_id = $1
+`
+
+// 设置用户在线（登录时调用）
+func (q *Queries) SetUserOnline(ctx context.Context, userID string) error {
+	_, err := q.exec(ctx, q.setUserOnlineStmt, setUserOnline, userID)
+	return err
+}
+
+const setUserSystemRole = `-- name: SetUserSystemRole :exec
+UPDATE users 
+SET system_role = $2
+WHERE user_id = $1
+`
+
+type SetUserSystemRoleParams struct {
+	UserID     string             `json:"user_id"`
+	SystemRole NullUserSystemRole `json:"system_role"`
+}
+
+// 设置用户系统角色（超级管理员操作）
+func (q *Queries) SetUserSystemRole(ctx context.Context, arg SetUserSystemRoleParams) error {
+	_, err := q.exec(ctx, q.setUserSystemRoleStmt, setUserSystemRole, arg.UserID, arg.SystemRole)
+	return err
+}
+
+const suspendUser = `-- name: SuspendUser :exec
+UPDATE users 
+SET account_status = 'suspended'
+WHERE user_id = $1
+`
+
+// 封禁用户账号（管理员操作）
+func (q *Queries) SuspendUser(ctx context.Context, userID string) error {
+	_, err := q.exec(ctx, q.suspendUserStmt, suspendUser, userID)
+	return err
+}
+
+const updateAccountStatus = `-- name: UpdateAccountStatus :exec
+
+UPDATE users 
+SET account_status = $2
+WHERE user_id = $1
+`
+
+type UpdateAccountStatusParams struct {
+	UserID        string                `json:"user_id"`
+	AccountStatus NullUserAccountStatus `json:"account_status"`
+}
+
+// =============================================
+// 5. 账号管理 (Account Management)
+// =============================================
+// 更新账号状态（管理员操作）
+func (q *Queries) UpdateAccountStatus(ctx context.Context, arg UpdateAccountStatusParams) error {
+	_, err := q.exec(ctx, q.updateAccountStatusStmt, updateAccountStatus, arg.UserID, arg.AccountStatus)
+	return err
+}
+
+const updateUser = `-- name: UpdateUser :one
+
+UPDATE users 
+SET 
+    nickname = COALESCE($2, nickname),
+    phone_number = COALESCE($3, phone_number),
+    email = COALESCE($4, email),
+    avatar_url = COALESCE($5, avatar_url),
+    bio = COALESCE($6, bio)
 WHERE user_id = $1
 RETURNING 
     user_id,
@@ -184,16 +664,18 @@ RETURNING
 `
 
 type UpdateUserParams struct {
-	UserID       string               `json:"user_id"`
-	Nickname     sql.NullString       `json:"nickname"`
-	PhoneNumber  sql.NullString       `json:"phone_number"`
-	Email        sql.NullString       `json:"email"`
-	AvatarUrl    sql.NullString       `json:"avatar_url"`
-	Bio          sql.NullString       `json:"bio"`
-	OnlineStatus NullUserOnlineStatus `json:"online_status"`
-	LastLoginAt  sql.NullTime         `json:"last_login_at"`
+	UserID      string         `json:"user_id"`
+	Nickname    sql.NullString `json:"nickname"`
+	PhoneNumber sql.NullString `json:"phone_number"`
+	Email       sql.NullString `json:"email"`
+	AvatarUrl   sql.NullString `json:"avatar_url"`
+	Bio         sql.NullString `json:"bio"`
 }
 
+// =============================================
+// 2. 用户信息管理 (User Profile Management)
+// =============================================
+// 更新用户资料 PUT /users/me
 func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (User, error) {
 	row := q.queryRow(ctx, q.updateUserStmt, updateUser,
 		arg.UserID,
@@ -202,8 +684,6 @@ func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (User, e
 		arg.Email,
 		arg.AvatarUrl,
 		arg.Bio,
-		arg.OnlineStatus,
-		arg.LastLoginAt,
 	)
 	var i User
 	err := row.Scan(
@@ -224,6 +704,56 @@ func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (User, e
 	return i, err
 }
 
+const updateUserAvatar = `-- name: UpdateUserAvatar :exec
+UPDATE users 
+SET avatar_url = $2
+WHERE user_id = $1
+`
+
+type UpdateUserAvatarParams struct {
+	UserID    string         `json:"user_id"`
+	AvatarUrl sql.NullString `json:"avatar_url"`
+}
+
+// 更新用户头像 POST /upload/avatar
+func (q *Queries) UpdateUserAvatar(ctx context.Context, arg UpdateUserAvatarParams) error {
+	_, err := q.exec(ctx, q.updateUserAvatarStmt, updateUserAvatar, arg.UserID, arg.AvatarUrl)
+	return err
+}
+
+const updateUserLastLogin = `-- name: UpdateUserLastLogin :exec
+UPDATE users 
+SET last_login_at = NOW()
+WHERE user_id = $1
+`
+
+// 更新最后登录时间
+func (q *Queries) UpdateUserLastLogin(ctx context.Context, userID string) error {
+	_, err := q.exec(ctx, q.updateUserLastLoginStmt, updateUserLastLogin, userID)
+	return err
+}
+
+const updateUserOnlineStatus = `-- name: UpdateUserOnlineStatus :exec
+
+UPDATE users 
+SET online_status = $2
+WHERE user_id = $1
+`
+
+type UpdateUserOnlineStatusParams struct {
+	UserID       string               `json:"user_id"`
+	OnlineStatus NullUserOnlineStatus `json:"online_status"`
+}
+
+// =============================================
+// 3. 用户状态管理 (User Status Management)
+// =============================================
+// 更新在线状态 PUT /users/me/status
+func (q *Queries) UpdateUserOnlineStatus(ctx context.Context, arg UpdateUserOnlineStatusParams) error {
+	_, err := q.exec(ctx, q.updateUserOnlineStatusStmt, updateUserOnlineStatus, arg.UserID, arg.OnlineStatus)
+	return err
+}
+
 const updateUserPassword = `-- name: UpdateUserPassword :exec
 UPDATE users 
 SET hashed_password = $2
@@ -235,6 +765,7 @@ type UpdateUserPasswordParams struct {
 	HashedPassword string `json:"hashed_password"`
 }
 
+// 修改密码 POST /auth/change-password
 func (q *Queries) UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) error {
 	_, err := q.exec(ctx, q.updateUserPasswordStmt, updateUserPassword, arg.UserID, arg.HashedPassword)
 	return err

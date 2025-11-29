@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="DataSourcePerFileMappings">
+    <file url="file://$APPLICATION_CONFIG_DIR$/consoles/db/474675cc-5b9b-45b9-a4ae-03b572b5beeb/console.sql" value="474675cc-5b9b-45b9-a4ae-03b572b5beeb" />
+    <file url="file://$PROJECT_DIR$/dbsql/query/chatroom.sql" value="474675cc-5b9b-45b9-a4ae-03b572b5beeb" />
+  </component>
+</project>

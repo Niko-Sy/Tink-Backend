@@ -6,41 +6,406 @@ package sqlcdb
 
 import (
 	"context"
+	"database/sql"
+	"time"
 )
 
 type Querier interface {
+	// 激活用户账号
+	ActivateUser(ctx context.Context, userID string) error
+	// 归档聊天室
+	ArchiveChatroom(ctx context.Context, roomID string) error
+	// =============================================
+	// 3. 综合禁言检查 (Combined Mute Checks)
+	// =============================================
+	// 检查用户是否可以在聊天室发送消息（综合检查全局禁言和聊天室禁言）
+	CanUserSendMessageInRoom(ctx context.Context, arg CanUserSendMessageInRoomParams) (sql.NullBool, error)
+	// 检查邮箱是否已存在
+	CheckEmailExists(ctx context.Context, email sql.NullString) (bool, error)
+	// 检查手机号是否已存在
+	CheckPhoneExists(ctx context.Context, phoneNumber sql.NullString) (bool, error)
+	// 检查用户名是否已存在
+	CheckUsernameExists(ctx context.Context, username string) (bool, error)
+	// 清除过期的禁言
+	ClearExpiredMutes(ctx context.Context) error
+	// =============================================
+	// 3. 日志统计 (Log Statistics)
+	// =============================================
+	// 统计日志总数
+	CountAdminLogs(ctx context.Context) (int64, error)
+	// 统计操作员的日志数
+	CountAdminLogsByOperator(ctx context.Context, operatorUserID sql.NullString) (int64, error)
+	// 统计聊天室的日志数
+	CountAdminLogsByRoom(ctx context.Context, relatedRoomID sql.NullString) (int64, error)
+	// 按类型统计日志数
+	CountAdminLogsByType(ctx context.Context, operationType string) (int64, error)
+	// 统计聊天室成员数量
 	CountChatroomMembers(ctx context.Context, roomID string) (int64, error)
+	// =============================================
+	// 3. 消息统计与未读 (Message Statistics)
+	// =============================================
+	// 统计聊天室消息数量
+	CountMessagesInRoom(ctx context.Context, roomID string) (int64, error)
+	// 统计聊天室在线成员数量
+	CountOnlineChatroomMembers(ctx context.Context, roomID string) (int64, error)
+	// 统计在线用户数
+	CountOnlineUsers(ctx context.Context) (int64, error)
+	// 搜索用户计数
+	CountSearchUsers(ctx context.Context, dollar_1 sql.NullString) (int64, error)
+	// 统计用户加入的聊天室数量
 	CountUserChatrooms(ctx context.Context, userID string) (int64, error)
+	// =============================================
+	// 管理操作日志相关SQL查询 (Admin Log Queries)
+	// 对应API: 系统管理接口
+	// =============================================
+	// =============================================
+	// 1. 日志创建 (Log Creation)
+	// =============================================
+	// 创建管理操作日志
+	CreateAdminLog(ctx context.Context, arg CreateAdminLogParams) (AdminLog, error)
+	// 创建封禁账号操作日志
+	CreateBanLog(ctx context.Context, arg CreateBanLogParams) (AdminLog, error)
+	// =============================================
+	// 聊天室相关SQL查询 (Chatroom Queries)
+	// 对应API: 聊天室管理接口 + 聊天室成员管理接口
+	// =============================================
+	// =============================================
+	// 1. 聊天室基础操作 (Chatroom CRUD)
+	// =============================================
+	// 创建聊天室 POST /chatrooms
 	CreateChatroom(ctx context.Context, arg CreateChatroomParams) (Chatroom, error)
+	// 创建删除消息操作日志
+	CreateDeleteMessageLog(ctx context.Context, arg CreateDeleteMessageLogParams) (AdminLog, error)
+	// =============================================
+	// 2. 全局禁言记录 (Global Mute Records)
+	// =============================================
+	// 创建全局禁言记录（超级管理员操作）
+	CreateGlobalMuteRecord(ctx context.Context, arg CreateGlobalMuteRecordParams) (GlobalMuteRecord, error)
+	// 创建踢人操作日志
+	CreateKickLog(ctx context.Context, arg CreateKickLogParams) (AdminLog, error)
+	// =============================================
+	// 消息相关SQL查询 (Message Queries)
+	// 对应API: 消息相关接口
+	// =============================================
+	// =============================================
+	// 1. 消息基础操作 (Message CRUD)
+	// =============================================
+	// 发送消息 POST /chatrooms/:roomId/messages
 	CreateMessage(ctx context.Context, arg CreateMessageParams) (Message, error)
+	// 创建禁言操作日志
+	CreateMuteLog(ctx context.Context, arg CreateMuteLogParams) (AdminLog, error)
+	// =============================================
+	// 禁言记录相关SQL查询 (Mute Record Queries)
+	// 对应API: 聊天室成员管理接口 - 禁言功能
+	// =============================================
+	// =============================================
+	// 1. 聊天室禁言记录 (Room Mute Records)
+	// =============================================
+	// 创建禁言记录 POST /chatrooms/:roomId/members/:userId/mute
+	CreateMuteRecord(ctx context.Context, arg CreateMuteRecordParams) (MuteRecord, error)
+	// 创建角色变更操作日志
+	CreateRoleChangeLog(ctx context.Context, arg CreateRoleChangeLogParams) (AdminLog, error)
+	// 创建解除禁言操作日志
+	CreateUnmuteLog(ctx context.Context, arg CreateUnmuteLogParams) (AdminLog, error)
+	// =============================================
+	// 用户相关SQL查询 (User Queries)
+	// 对应API: 认证相关接口 + 用户管理接口
+	// =============================================
+	// =============================================
+	// 1. 认证相关 (Authentication)
+	// =============================================
+	// 用户注册 POST /auth/register
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
+	// 解除全局禁言
+	DeactivateGlobalMuteRecord(ctx context.Context, mutedUserID string) error
+	// 通过ID解除全局禁言
+	DeactivateGlobalMuteRecordByID(ctx context.Context, globalMuteID string) error
+	// 解除禁言（使禁言记录失效）POST /chatrooms/:roomId/members/:userId/unmute
+	DeactivateMuteRecord(ctx context.Context, memberRelID string) error
+	// 通过ID解除禁言
+	DeactivateMuteRecordByID(ctx context.Context, muteRecordID string) error
+	// 减少成员计数
 	DecrementChatroomMemberCount(ctx context.Context, roomID string) error
+	// 减少在线人数
 	DecrementChatroomOnlineCount(ctx context.Context, roomID string) error
+	// 删除聊天室（软删除）DELETE /chatrooms/:roomId
 	DeleteChatroom(ctx context.Context, roomID string) error
+	// 删除消息 DELETE /chatrooms/:roomId/messages/:messageId
 	DeleteMessage(ctx context.Context, messageID string) error
+	// 软删除消息（将内容置为系统消息提示）
+	DeleteMessageSoft(ctx context.Context, messageID string) (Message, error)
+	// =============================================
+	// 7. 批量操作 (Batch Operations)
+	// =============================================
+	// 删除聊天室所有消息
+	DeleteMessagesByRoom(ctx context.Context, roomID string) error
+	// 删除用户所有消息
+	DeleteMessagesByUser(ctx context.Context, senderID sql.NullString) error
+	// 删除用户在指定聊天室的所有消息
+	DeleteMessagesByUserInRoom(ctx context.Context, arg DeleteMessagesByUserInRoomParams) error
+	// 删除用户账号（软删除）
+	DeleteUserAccount(ctx context.Context, userID string) error
+	// 批量过期全局禁言记录
+	ExpireGlobalMuteRecords(ctx context.Context) error
+	// 批量过期禁言记录
+	ExpireMuteRecords(ctx context.Context) error
+	// 获取用户当前有效的全局禁言记录
+	GetActiveGlobalMuteRecord(ctx context.Context, mutedUserID string) (GlobalMuteRecord, error)
+	// 获取有效的成员关系
+	GetActiveMembership(ctx context.Context, arg GetActiveMembershipParams) (ChatroomMember, error)
+	// 获取成员当前有效的禁言记录
+	GetActiveMuteRecord(ctx context.Context, memberRelID string) (MuteRecord, error)
+	// 获取聊天室当前有效的禁言记录
+	GetActiveMuteRecordsByRoom(ctx context.Context, roomID string) ([]GetActiveMuteRecordsByRoomRow, error)
+	// =============================================
+	// 2. 日志查询 (Log Queries)
+	// =============================================
+	// 获取单条日志
+	GetAdminLogByID(ctx context.Context, logID string) (AdminLog, error)
+	// 获取各类型操作的统计
+	GetAdminLogStats(ctx context.Context) ([]GetAdminLogStatsRow, error)
+	// 获取所有管理日志（分页）
+	GetAdminLogs(ctx context.Context, arg GetAdminLogsParams) ([]GetAdminLogsRow, error)
+	// 获取指定操作员的日志
+	GetAdminLogsByOperator(ctx context.Context, arg GetAdminLogsByOperatorParams) ([]GetAdminLogsByOperatorRow, error)
+	// 获取聊天室的管理日志
+	GetAdminLogsByRoom(ctx context.Context, arg GetAdminLogsByRoomParams) ([]GetAdminLogsByRoomRow, error)
+	// 按时间范围获取日志
+	GetAdminLogsByTimeRange(ctx context.Context, arg GetAdminLogsByTimeRangeParams) ([]GetAdminLogsByTimeRangeRow, error)
+	// 按操作类型获取日志
+	GetAdminLogsByType(ctx context.Context, arg GetAdminLogsByTypeParams) ([]GetAdminLogsByTypeRow, error)
+	// 获取涉及指定用户的日志
+	GetAdminLogsByUser(ctx context.Context, arg GetAdminLogsByUserParams) ([]GetAdminLogsByUserRow, error)
+	// 获取所有有效的全局禁言记录
+	GetAllActiveGlobalMuteRecords(ctx context.Context, arg GetAllActiveGlobalMuteRecordsParams) ([]GetAllActiveGlobalMuteRecordsRow, error)
+	// 获取聊天室管理员列表
+	GetChatroomAdmins(ctx context.Context, roomID string) ([]GetChatroomAdminsRow, error)
+	// 获取聊天室详情 GET /chatrooms/:roomId
 	GetChatroomByID(ctx context.Context, roomID string) (Chatroom, error)
+	// =============================================
+	// 4. 成员列表查询 (Member List Queries)
+	// =============================================
+	// 获取聊天室成员列表 GET /chatrooms/:roomId/members
 	GetChatroomMembers(ctx context.Context, arg GetChatroomMembersParams) ([]GetChatroomMembersRow, error)
+	// 获取聊天室房主
+	GetChatroomOwner(ctx context.Context, roomID string) (GetChatroomOwnerRow, error)
+	// 获取聊天室详情（不含密码，用于公开展示）
+	GetChatroomWithoutPassword(ctx context.Context, roomID string) (GetChatroomWithoutPasswordRow, error)
+	// 获取全局管理日志
+	GetGlobalAdminLogs(ctx context.Context, arg GetGlobalAdminLogsParams) ([]GetGlobalAdminLogsRow, error)
+	// 获取全局禁言记录
+	GetGlobalMuteRecordByID(ctx context.Context, globalMuteID string) (GlobalMuteRecord, error)
+	// 获取用户的所有全局禁言记录
+	GetGlobalMuteRecordsByUser(ctx context.Context, arg GetGlobalMuteRecordsByUserParams) ([]GlobalMuteRecord, error)
+	// 获取聊天室最后一条消息
+	GetLastMessageInRoom(ctx context.Context, roomID string) (GetLastMessageInRoomRow, error)
+	// 获取最新消息
+	GetLatestMessages(ctx context.Context, arg GetLatestMessagesParams) ([]GetLatestMessagesRow, error)
+	// 通过关系ID获取成员信息
+	GetMemberByRelID(ctx context.Context, memberRelID string) (ChatroomMember, error)
+	// 获取成员最后阅读时间
+	GetMemberLastReadTime(ctx context.Context, arg GetMemberLastReadTimeParams) (sql.NullTime, error)
+	// 获取成员禁言到期时间
+	GetMemberMuteExpireTime(ctx context.Context, arg GetMemberMuteExpireTimeParams) (time.Time, error)
+	// 获取成员角色
+	GetMemberRole(ctx context.Context, arg GetMemberRoleParams) (MemberRole, error)
+	// 获取单条消息
 	GetMessageByID(ctx context.Context, messageID string) (Message, error)
-	GetMessagesByRoom(ctx context.Context, arg GetMessagesByRoomParams) ([]Message, error)
+	// 获取消息所属聊天室ID
+	GetMessageRoom(ctx context.Context, messageID string) (string, error)
+	// 获取消息发送者ID
+	GetMessageSender(ctx context.Context, messageID string) (sql.NullString, error)
+	// 获取消息及发送者信息
+	GetMessageWithSender(ctx context.Context, messageID string) (GetMessageWithSenderRow, error)
+	// 获取指定消息之后的消息
+	GetMessagesAfter(ctx context.Context, arg GetMessagesAfterParams) ([]GetMessagesAfterRow, error)
+	// 获取指定消息之前的消息 GET /chatrooms/:roomId/messages?before=M100
+	GetMessagesBefore(ctx context.Context, arg GetMessagesBeforeParams) ([]GetMessagesBeforeRow, error)
+	// 批量获取消息
+	GetMessagesByIDs(ctx context.Context, dollar_1 []string) ([]GetMessagesByIDsRow, error)
+	// =============================================
+	// 2. 消息列表查询 (Message List Queries)
+	// =============================================
+	// 获取聊天室消息历史 GET /chatrooms/:roomId/messages
+	GetMessagesByRoom(ctx context.Context, arg GetMessagesByRoomParams) ([]GetMessagesByRoomRow, error)
+	// 获取聊天室消息历史（时间正序）
+	GetMessagesByRoomAsc(ctx context.Context, arg GetMessagesByRoomAscParams) ([]GetMessagesByRoomAscRow, error)
+	// 获取时间范围内的消息
+	GetMessagesByTimeRange(ctx context.Context, arg GetMessagesByTimeRangeParams) ([]GetMessagesByTimeRangeRow, error)
+	// 获取用户发送的消息
+	GetMessagesByUser(ctx context.Context, arg GetMessagesByUserParams) ([]Message, error)
+	// 获取用户在指定聊天室发送的消息
+	GetMessagesByUserInRoom(ctx context.Context, arg GetMessagesByUserInRoomParams) ([]Message, error)
+	// 获取引用了指定消息的消息列表
+	GetMessagesQuotingThis(ctx context.Context, quotedMessageID sql.NullString) ([]GetMessagesQuotingThisRow, error)
+	// 获取禁言记录
+	GetMuteRecordByID(ctx context.Context, muteRecordID string) (MuteRecord, error)
+	// 获取成员的所有禁言记录
+	GetMuteRecordsByMember(ctx context.Context, arg GetMuteRecordsByMemberParams) ([]MuteRecord, error)
+	// 获取聊天室的所有禁言记录
+	GetMuteRecordsByRoom(ctx context.Context, arg GetMuteRecordsByRoomParams) ([]GetMuteRecordsByRoomRow, error)
+	// 获取被禁言的成员列表
+	GetMutedMembers(ctx context.Context, roomID string) ([]GetMutedMembersRow, error)
+	// 获取聊天室在线成员列表 GET /chatrooms/:roomId/members?status=online
+	GetOnlineChatroomMembers(ctx context.Context, arg GetOnlineChatroomMembersParams) ([]GetOnlineChatroomMembersRow, error)
+	// 获取在线用户列表
+	GetOnlineUsers(ctx context.Context, arg GetOnlineUsersParams) ([]GetOnlineUsersRow, error)
+	// 获取各操作员的操作统计
+	GetOperatorStats(ctx context.Context, limit int64) ([]GetOperatorStatsRow, error)
+	// =============================================
+	// 5. 引用消息 (Quoted Messages)
+	// =============================================
+	// 获取被引用的消息
+	GetQuotedMessage(ctx context.Context, messageID string) (GetQuotedMessageRow, error)
+	// 获取未读消息数量
 	GetUnreadMessageCount(ctx context.Context, arg GetUnreadMessageCountParams) (int64, error)
+	// 获取未读消息列表
+	GetUnreadMessages(ctx context.Context, arg GetUnreadMessagesParams) ([]GetUnreadMessagesRow, error)
+	// 用户登录时通过邮箱查找 POST /auth/login
+	GetUserByEmail(ctx context.Context, email sql.NullString) (User, error)
+	// 根据ID获取用户信息 GET /users/:userId
 	GetUserByID(ctx context.Context, userID string) (User, error)
+	// 用户登录时通过用户名查找 POST /auth/login
 	GetUserByUsername(ctx context.Context, username string) (User, error)
+	// 获取用户在聊天室的成员信息 GET /chatrooms/:roomId/members/:userId
 	GetUserChatroomMembership(ctx context.Context, arg GetUserChatroomMembershipParams) (ChatroomMember, error)
+	// 获取用户全局禁言到期时间
+	GetUserGlobalMuteExpireTime(ctx context.Context, mutedUserID string) (time.Time, error)
+	// 获取用户的禁言状态（返回全局禁言和聊天室禁言状态）
+	GetUserMuteStatus(ctx context.Context, arg GetUserMuteStatusParams) (GetUserMuteStatusRow, error)
+	// 获取用户公开信息（不含敏感信息）GET /users/:userId
+	GetUserPublicInfo(ctx context.Context, userID string) (GetUserPublicInfoRow, error)
+	// 获取用户系统角色
+	GetUserSystemRole(ctx context.Context, userID string) (NullUserSystemRole, error)
+	// 获取用户在所有聊天室的未读消息数
+	GetUserUnreadCountsInAllRooms(ctx context.Context, userID string) ([]GetUserUnreadCountsInAllRoomsRow, error)
+	// =============================================
+	// 6. 批量查询 (Batch Queries)
+	// =============================================
+	// 批量获取用户信息
+	GetUsersByIDs(ctx context.Context, dollar_1 []string) ([]GetUsersByIDsRow, error)
+	// =============================================
+	// 8. 聊天室统计 (Chatroom Statistics)
+	// =============================================
+	// 增加成员计数
 	IncrementChatroomMemberCount(ctx context.Context, roomID string) error
+	// 增加在线人数
 	IncrementChatroomOnlineCount(ctx context.Context, roomID string) error
+	// 检查聊天室是否为公开
+	IsChatroomPublic(ctx context.Context, roomID string) (bool, error)
+	// 检查成员是否被禁言
 	IsMemberMuted(ctx context.Context, arg IsMemberMutedParams) (bool, error)
+	// 检查成员在聊天室是否被禁言
+	IsMemberMutedInRoom(ctx context.Context, arg IsMemberMutedInRoomParams) (bool, error)
+	// =============================================
+	// 6. 消息权限验证 (Permission Checks)
+	// =============================================
+	// 检查用户是否是消息发送者
+	IsMessageSender(ctx context.Context, arg IsMessageSenderParams) (bool, error)
+	// 检查用户是否为管理员
+	IsUserAdmin(ctx context.Context, userID string) (bool, error)
+	// 检查用户是否为管理员或房主
+	IsUserAdminOrOwner(ctx context.Context, arg IsUserAdminOrOwnerParams) (bool, error)
+	// 检查用户是否被全局禁言
+	IsUserGloballyMuted(ctx context.Context, mutedUserID string) (bool, error)
+	// 检查用户是否在聊天室中
+	IsUserInChatroom(ctx context.Context, arg IsUserInChatroomParams) (bool, error)
+	// 检查用户是否为房主
+	IsUserOwner(ctx context.Context, arg IsUserOwnerParams) (bool, error)
+	// =============================================
+	// 3. 聊天室成员操作 (Member Operations)
+	// =============================================
+	// 加入聊天室 POST /chatrooms/:roomId/join
 	JoinChatroom(ctx context.Context, arg JoinChatroomParams) (ChatroomMember, error)
+	// 踢出成员 POST /chatrooms/:roomId/members/:userId/kick
+	KickMember(ctx context.Context, arg KickMemberParams) error
+	// 退出聊天室 POST /chatrooms/:roomId/leave
 	LeaveChatroom(ctx context.Context, arg LeaveChatroomParams) error
+	// 获取公开聊天室列表
+	ListPublicChatrooms(ctx context.Context, arg ListPublicChatroomsParams) ([]ListPublicChatroomsRow, error)
+	// =============================================
+	// 2. 聊天室列表查询 (Chatroom List Queries)
+	// =============================================
+	// 获取用户的聊天室列表 GET /users/me/chatrooms
 	ListUserChatrooms(ctx context.Context, arg ListUserChatroomsParams) ([]ListUserChatroomsRow, error)
+	// =============================================
+	// 6. 禁言管理 (Mute Management)
+	// =============================================
+	// 禁言成员 POST /chatrooms/:roomId/members/:userId/mute
 	MuteMember(ctx context.Context, arg MuteMemberParams) error
+	// 取消管理员 POST /chatrooms/:roomId/members/:userId/remove-admin
+	RemoveMemberAdmin(ctx context.Context, arg RemoveMemberAdminParams) error
+	// 搜索聊天室
+	SearchChatrooms(ctx context.Context, arg SearchChatroomsParams) ([]SearchChatroomsRow, error)
+	// =============================================
+	// 4. 消息搜索 (Message Search)
+	// =============================================
+	// 在聊天室中搜索消息
+	SearchMessagesInRoom(ctx context.Context, arg SearchMessagesInRoomParams) ([]SearchMessagesInRoomRow, error)
+	// =============================================
+	// 4. 用户搜索 (User Search)
+	// =============================================
+	// 搜索用户 GET /users/search
+	SearchUsers(ctx context.Context, arg SearchUsersParams) ([]SearchUsersRow, error)
+	// 设置管理员 POST /chatrooms/:roomId/members/:userId/set-admin
+	SetMemberAsAdmin(ctx context.Context, arg SetMemberAsAdminParams) error
+	// =============================================
+	// 5. 成员角色管理 (Member Role Management)
+	// =============================================
+	// 设置成员角色 POST /chatrooms/:roomId/members/:userId/set-admin
 	SetMemberRole(ctx context.Context, arg SetMemberRoleParams) error
+	// 设置用户离线（退出登录时调用）
+	SetUserOffline(ctx context.Context, userID string) error
+	// 设置用户在线（登录时调用）
+	SetUserOnline(ctx context.Context, userID string) error
+	// 设置用户系统角色（超级管理员操作）
+	SetUserSystemRole(ctx context.Context, arg SetUserSystemRoleParams) error
+	// 封禁用户账号（管理员操作）
+	SuspendUser(ctx context.Context, userID string) error
+	// 同步成员计数（用于数据修复）
+	SyncChatroomMemberCount(ctx context.Context, dollar_1 sql.NullString) error
+	// 同步在线人数（用于数据修复）
+	SyncChatroomOnlineCount(ctx context.Context, dollar_1 sql.NullString) error
+	// 转让房主
+	TransferOwnership(ctx context.Context, arg TransferOwnershipParams) error
+	// 解除禁言 POST /chatrooms/:roomId/members/:userId/unmute
 	UnmuteMember(ctx context.Context, arg UnmuteMemberParams) error
+	// =============================================
+	// 5. 账号管理 (Account Management)
+	// =============================================
+	// 更新账号状态（管理员操作）
+	UpdateAccountStatus(ctx context.Context, arg UpdateAccountStatusParams) error
+	// 更新聊天室信息 PUT /chatrooms/:roomId
 	UpdateChatroom(ctx context.Context, arg UpdateChatroomParams) (Chatroom, error)
+	// 更新最后活跃时间
 	UpdateChatroomLastActiveTime(ctx context.Context, roomID string) error
+	// =============================================
+	// 7. 消息已读管理 (Read Status Management)
+	// =============================================
+	// 更新最后阅读时间 POST /chatrooms/:roomId/messages/read
 	UpdateMemberLastReadTime(ctx context.Context, arg UpdateMemberLastReadTimeParams) error
+	// 更新最后阅读到指定消息
+	UpdateMemberLastReadToMessage(ctx context.Context, arg UpdateMemberLastReadToMessageParams) error
+	// 编辑消息 PUT /chatrooms/:roomId/messages/:messageId
 	UpdateMessage(ctx context.Context, arg UpdateMessageParams) (Message, error)
+	// =============================================
+	// 2. 用户信息管理 (User Profile Management)
+	// =============================================
+	// 更新用户资料 PUT /users/me
 	UpdateUser(ctx context.Context, arg UpdateUserParams) (User, error)
+	// 更新用户头像 POST /upload/avatar
+	UpdateUserAvatar(ctx context.Context, arg UpdateUserAvatarParams) error
+	// 更新最后登录时间
+	UpdateUserLastLogin(ctx context.Context, userID string) error
+	// =============================================
+	// 3. 用户状态管理 (User Status Management)
+	// =============================================
+	// 更新在线状态 PUT /users/me/status
+	UpdateUserOnlineStatus(ctx context.Context, arg UpdateUserOnlineStatusParams) error
+	// 修改密码 POST /auth/change-password
 	UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) error
+	// 验证聊天室密码
+	VerifyChatroomPassword(ctx context.Context, arg VerifyChatroomPasswordParams) (bool, error)
 }
 
 var _ Querier = (*Queries)(nil)

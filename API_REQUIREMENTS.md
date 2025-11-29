@@ -1,6 +1,7 @@
 # ChatRoom 后端接口需求文档
 
 ## 文档信息
+
 - **项目名称**: Tink ChatRoom
 - **前端技术栈**: React + TypeScript + Vite
 - **文档版本**: 1.0.0
@@ -9,6 +10,7 @@
 ---
 
 ## 目录
+
 1. [通用说明](#1-通用说明)
 2. [认证相关接口](#2-认证相关接口)
 3. [用户管理接口](#3-用户管理接口)
@@ -27,19 +29,23 @@
 ## 1. 通用说明
 
 ### 1.1 基础URL
+
 ```
 开发环境: http://localhost:3000/api
 生产环境: https://api.tink.chat/api
 ```
 
 ### 1.2 请求头
+
 所有需要认证的接口都需要在请求头中携带：
+
 ```http
 Authorization: Bearer <token>
 Content-Type: application/json
 ```
 
 ### 1.3 通用响应格式
+
 ```typescript
 {
   "code": 200,           // 状态码：200成功，400客户端错误，500服务器错误
@@ -50,6 +56,7 @@ Content-Type: application/json
 ```
 
 ### 1.4 错误码定义
+
 ```typescript
 200: 成功
 400: 请求参数错误
@@ -66,9 +73,11 @@ Content-Type: application/json
 ## 2. 认证相关接口
 
 ### 2.1 用户注册
+
 **接口**: `POST /auth/register`
 
 **请求体**:
+
 ```typescript
 {
   "username": "zhangwei",        // 必填，3-20字符，仅字母数字下划线
@@ -79,6 +88,7 @@ Content-Type: application/json
 ```
 
 **响应**:
+
 ```typescript
 {
   "code": 200,
@@ -99,9 +109,11 @@ Content-Type: application/json
 ```
 
 ### 2.2 用户登录
+
 **接口**: `POST /auth/login`
 
 **请求体**:
+
 ```typescript
 {
   "username": "zhangwei",  // 必填，用户名或邮箱
@@ -112,11 +124,13 @@ Content-Type: application/json
 **响应**: 同注册接口
 
 ### 2.3 退出登录
+
 **接口**: `POST /auth/logout`
 
 **请求头**: 需要 Authorization
 
 **响应**:
+
 ```typescript
 {
   "code": 200,
@@ -125,11 +139,13 @@ Content-Type: application/json
 ```
 
 ### 2.4 刷新Token
+
 **接口**: `POST /auth/refresh-token`
 
 **请求头**: 需要 Authorization
 
 **响应**:
+
 ```typescript
 {
   "code": 200,
@@ -142,9 +158,11 @@ Content-Type: application/json
 ```
 
 ### 2.5 修改密码
+
 **接口**: `POST /auth/change-password`
 
 **请求体**:
+
 ```typescript
 {
   "oldPassword": "123456",
@@ -157,9 +175,11 @@ Content-Type: application/json
 ## 3. 用户管理接口
 
 ### 3.1 获取当前用户信息
+
 **接口**: `GET /users/me`
 
 **响应**:
+
 ```typescript
 {
   "code": 200,
@@ -184,9 +204,11 @@ Content-Type: application/json
 ```
 
 ### 3.2 更新用户资料
-**接口**: `PUT /users/me`
+
+**接口**: `POST /users/me/update`
 
 **请求体**:
+
 ```typescript
 {
   "nickname": "新昵称",
@@ -198,19 +220,23 @@ Content-Type: application/json
 ```
 
 ### 3.3 根据ID获取用户信息
+
 **接口**: `GET /users/:userId`
 
 **响应**: 同3.1，但不包含敏感信息（email, phone等）
 
 ### 3.4 搜索用户
+
 **接口**: `GET /users/search`
 
 **查询参数**:
+
 ```
 ?keyword=张伟&page=1&pageSize=20
 ```
 
 **响应**:
+
 ```typescript
 {
   "code": 200,
@@ -232,9 +258,11 @@ Content-Type: application/json
 ```
 
 ### 3.5 更新在线状态
-**接口**: `PUT /users/me/status`
+
+**接口**: `POST /users/me/status/update`
 
 **请求体**:
+
 ```typescript
 {
   "onlineStatus": "online" | "away" | "busy" | "offline"
@@ -246,9 +274,11 @@ Content-Type: application/json
 ## 4. 聊天室管理接口
 
 ### 4.1 创建聊天室
+
 **接口**: `POST /chatrooms`
 
 **请求体**:
+
 ```typescript
 {
   "name": "综合文字",
@@ -260,6 +290,7 @@ Content-Type: application/json
 ```
 
 **响应**:
+
 ```typescript
 {
   "code": 200,
@@ -280,9 +311,11 @@ Content-Type: application/json
 ```
 
 ### 4.2 加入聊天室
+
 **接口**: `POST /chatrooms/:roomId/join`
 
 **请求体**:
+
 ```typescript
 {
   "password": "123456"  // 仅protected类型需要
@@ -290,6 +323,7 @@ Content-Type: application/json
 ```
 
 **响应**:
+
 ```typescript
 {
   "code": 200,
@@ -310,9 +344,11 @@ Content-Type: application/json
 ```
 
 ### 4.3 退出聊天室
+
 **接口**: `POST /chatrooms/:roomId/leave`
 
 **响应**:
+
 ```typescript
 {
   "code": 200,
@@ -321,14 +357,17 @@ Content-Type: application/json
 ```
 
 ### 4.4 获取用户的聊天室列表
+
 **接口**: `GET /users/me/chatrooms`
 
 **查询参数**:
+
 ```
 ?page=1&pageSize=20
 ```
 
 **响应**:
+
 ```typescript
 {
   "code": 200,
@@ -362,9 +401,11 @@ Content-Type: application/json
 ```
 
 ### 4.5 获取聊天室详情
-**接口**: `GET /chatrooms/:roomId`
+
+**接口**: `GET /chatrooms/:roomId/info`
 
 **响应**:
+
 ```typescript
 {
   "code": 200,
@@ -384,11 +425,13 @@ Content-Type: application/json
 ```
 
 ### 4.6 更新聊天室信息
-**接口**: `PUT /chatrooms/:roomId`
+
+**接口**: `POST /chatrooms/:roomId/update`
 
 **权限**: 需要管理员权限
 
 **请求体**:
+
 ```typescript
 {
   "name": "新名称",
@@ -400,7 +443,8 @@ Content-Type: application/json
 ```
 
 ### 4.7 删除聊天室
-**接口**: `DELETE /chatrooms/:roomId`
+
+**接口**: `POST /chatrooms/:roomId/delete`
 
 **权限**: 仅创建者可删除
 
@@ -409,9 +453,11 @@ Content-Type: application/json
 ## 5. 消息相关接口
 
 ### 5.1 发送消息
+
 **接口**: `POST /chatrooms/:roomId/messages`
 
 **请求体**:
+
 ```typescript
 {
   "type": "text" | "image" | "file",
@@ -421,6 +467,7 @@ Content-Type: application/json
 ```
 
 **响应**:
+
 ```typescript
 {
   "code": 200,
@@ -439,14 +486,17 @@ Content-Type: application/json
 ```
 
 ### 5.2 获取聊天室消息历史
+
 **接口**: `GET /chatrooms/:roomId/messages`
 
 **查询参数**:
+
 ```
 ?page=1&pageSize=50&before=M100  // before: 获取指定消息之前的消息
 ```
 
 **响应**:
+
 ```typescript
 {
   "code": 200,
@@ -474,11 +524,13 @@ Content-Type: application/json
 ```
 
 ### 5.3 撤回/删除消息
-**接口**: `DELETE /chatrooms/:roomId/messages/:messageId`
+
+**接口**: `POST /chatrooms/:roomId/messages/:messageId/delete`
 
 **权限**: 消息发送者或管理员
 
 **响应**:
+
 ```typescript
 {
   "code": 200,
@@ -487,11 +539,13 @@ Content-Type: application/json
 ```
 
 ### 5.4 编辑消息
-**接口**: `PUT /chatrooms/:roomId/messages/:messageId`
+
+**接口**: `POST /chatrooms/:roomId/messages/:messageId/edit`
 
 **权限**: 消息发送者或管理员
 
 **请求体**:
+
 ```typescript
 {
   "text": "编辑后的内容"
@@ -499,6 +553,7 @@ Content-Type: application/json
 ```
 
 **响应**:
+
 ```typescript
 {
   "code": 200,
@@ -512,9 +567,11 @@ Content-Type: application/json
 ```
 
 ### 5.5 标记消息已读
+
 **接口**: `POST /chatrooms/:roomId/messages/read`
 
 **请求体**:
+
 ```typescript
 {
   "lastReadMessageId": "M100"
@@ -526,14 +583,17 @@ Content-Type: application/json
 ## 6. 聊天室成员管理接口
 
 ### 6.1 获取聊天室成员列表
+
 **接口**: `GET /chatrooms/:roomId/members`
 
 **查询参数**:
+
 ```
 ?page=1&pageSize=50&status=online  // status: online|away|offline|all
 ```
 
 **响应**:
+
 ```typescript
 {
   "code": 200,
@@ -565,9 +625,11 @@ Content-Type: application/json
 ```
 
 ### 6.2 获取用户在聊天室的成员信息
+
 **接口**: `GET /chatrooms/:roomId/members/:userId`
 
 **响应**:
+
 ```typescript
 {
   "code": 200,
@@ -586,11 +648,13 @@ Content-Type: application/json
 ```
 
 ### 6.3 禁言用户
+
 **接口**: `POST /chatrooms/:roomId/members/:userId/mute`
 
 **权限**: 管理员权限
 
 **请求体**:
+
 ```typescript
 {
   "duration": 3600,  // 禁言时长（秒），-1表示永久
@@ -599,6 +663,7 @@ Content-Type: application/json
 ```
 
 **响应**:
+
 ```typescript
 {
   "code": 200,
@@ -610,16 +675,19 @@ Content-Type: application/json
 ```
 
 ### 6.4 解除禁言
+
 **接口**: `POST /chatrooms/:roomId/members/:userId/unmute`
 
 **权限**: 管理员权限
 
 ### 6.5 踢出成员
+
 **接口**: `POST /chatrooms/:roomId/members/:userId/kick`
 
 **权限**: 管理员权限
 
 **请求体**:
+
 ```typescript
 {
   "reason": "违反规定"  // 可选
@@ -627,11 +695,13 @@ Content-Type: application/json
 ```
 
 ### 6.6 设置管理员
+
 **接口**: `POST /chatrooms/:roomId/members/:userId/set-admin`
 
 **权限**: 仅房主
 
 **响应**:
+
 ```typescript
 {
   "code": 200,
@@ -643,6 +713,7 @@ Content-Type: application/json
 ```
 
 ### 6.7 取消管理员
+
 **接口**: `POST /chatrooms/:roomId/members/:userId/remove-admin`
 
 **权限**: 仅房主
@@ -652,9 +723,11 @@ Content-Type: application/json
 ## 7. 好友关系接口
 
 ### 7.1 发送好友请求
+
 **接口**: `POST /friends/request`
 
 **请求体**:
+
 ```typescript
 {
   "targetUserId": "U123456790",
@@ -663,6 +736,7 @@ Content-Type: application/json
 ```
 
 **响应**:
+
 ```typescript
 {
   "code": 200,
@@ -674,14 +748,17 @@ Content-Type: application/json
 ```
 
 ### 7.2 获取好友列表
+
 **接口**: `GET /users/me/friends`
 
 **查询参数**:
+
 ```
 ?status=online  // online|away|offline|all
 ```
 
 **响应**:
+
 ```typescript
 {
   "code": 200,
@@ -702,14 +779,17 @@ Content-Type: application/json
 ```
 
 ### 7.3 获取好友请求列表
+
 **接口**: `GET /users/me/friend-requests`
 
 **查询参数**:
+
 ```
 ?type=received|sent&status=pending|accepted|rejected
 ```
 
 **响应**:
+
 ```typescript
 {
   "code": 200,
@@ -730,9 +810,11 @@ Content-Type: application/json
 ```
 
 ### 7.4 处理好友请求
+
 **接口**: `POST /friends/request/:requestId/handle`
 
 **请求体**:
+
 ```typescript
 {
   "action": "accept" | "reject"
@@ -740,21 +822,25 @@ Content-Type: application/json
 ```
 
 ### 7.5 删除好友
-**接口**: `DELETE /friends/:userId`
+
+**接口**: `POST /friends/:userId/delete`
 
 ---
 
 ## 8. 通知系统接口
 
 ### 8.1 获取通知列表
+
 **接口**: `GET /users/me/notifications`
 
 **查询参数**:
+
 ```
 ?type=all|friend|chatroom|system&status=unread|read|all&page=1&pageSize=20
 ```
 
 **响应**:
+
 ```typescript
 {
   "code": 200,
@@ -780,15 +866,19 @@ Content-Type: application/json
 ```
 
 ### 8.2 标记通知已读
+
 **接口**: `POST /notifications/:notificationId/read`
 
 ### 8.3 标记所有通知已读
+
 **接口**: `POST /users/me/notifications/read-all`
 
 ### 8.4 获取用户设置
+
 **接口**: `GET /users/me/settings`
 
 **响应**:
+
 ```typescript
 {
   "code": 200,
@@ -810,7 +900,8 @@ Content-Type: application/json
 ```
 
 ### 8.5 更新用户设置
-**接口**: `PUT /users/me/settings`
+
+**接口**: `POST /users/me/settings/update`
 
 **请求体**: 同8.4响应格式
 
@@ -819,14 +910,17 @@ Content-Type: application/json
 ## 9. 文件上传接口
 
 ### 9.1 上传头像
+
 **接口**: `POST /upload/avatar`
 
 **请求**: multipart/form-data
+
 ```
 file: <文件>
 ```
 
 **响应**:
+
 ```typescript
 {
   "code": 200,
@@ -839,11 +933,13 @@ file: <文件>
 ```
 
 ### 9.2 上传聊天图片
+
 **接口**: `POST /upload/image`
 
 **限制**: 最大5MB，支持jpg/png/gif
 
 ### 9.3 上传文件
+
 **接口**: `POST /upload/file`
 
 **限制**: 最大100MB
@@ -853,9 +949,11 @@ file: <文件>
 ## 10. 系统管理接口
 
 ### 10.1 举报用户/消息
+
 **接口**: `POST /reports`
 
 **请求体**:
+
 ```typescript
 {
   "type": "user" | "message",
@@ -867,6 +965,7 @@ file: <文件>
 ```
 
 **响应**:
+
 ```typescript
 {
   "code": 200,
@@ -878,9 +977,11 @@ file: <文件>
 ```
 
 ### 10.2 反馈建议
+
 **接口**: `POST /feedback`
 
 **请求体**:
+
 ```typescript
 {
   "type": "bug" | "feature" | "other",
@@ -891,9 +992,11 @@ file: <文件>
 ```
 
 ### 10.3 获取帮助中心文档
+
 **接口**: `GET /help/articles`
 
 **查询参数**:
+
 ```
 ?category=getting-started|account|chatroom|privacy
 ```
@@ -903,9 +1006,11 @@ file: <文件>
 ## 11. 实时通信接口（WebSocket）
 
 ### 11.1 连接
+
 **URL**: `ws://localhost:3000/ws` 或 `wss://api.tink.chat/ws`
 
 **连接时携带**:
+
 ```
 ?token=<jwt_token>
 ```
@@ -913,6 +1018,7 @@ file: <文件>
 ### 11.2 消息格式
 
 #### 客户端发送消息
+
 ```typescript
 {
   "type": "message",
@@ -926,6 +1032,7 @@ file: <文件>
 ```
 
 #### 服务端推送新消息
+
 ```typescript
 {
   "type": "message",
@@ -943,6 +1050,7 @@ file: <文件>
 ```
 
 #### 用户上线/下线通知
+
 ```typescript
 {
   "type": "user_status",
@@ -955,6 +1063,7 @@ file: <文件>
 ```
 
 #### 聊天室成员变动
+
 ```typescript
 {
   "type": "room_member",
@@ -968,6 +1077,7 @@ file: <文件>
 ```
 
 #### 禁言通知
+
 ```typescript
 {
   "type": "mute",
@@ -982,6 +1092,7 @@ file: <文件>
 ```
 
 #### 消息撤回通知
+
 ```typescript
 {
   "type": "message",
@@ -994,6 +1105,7 @@ file: <文件>
 ```
 
 #### 消息编辑通知
+
 ```typescript
 {
   "type": "message",
@@ -1008,6 +1120,7 @@ file: <文件>
 ```
 
 #### 心跳包
+
 ```typescript
 // 客户端发送（每30秒）
 {
@@ -1025,6 +1138,7 @@ file: <文件>
 ## 12. 数据模型定义
 
 ### 12.1 User（用户）
+
 ```typescript
 interface User {
   userId: string;              // 用户ID（U+9位数字）
@@ -1046,6 +1160,7 @@ interface User {
 ```
 
 ### 12.2 ChatRoom（聊天室）
+
 ```typescript
 interface ChatRoom {
   roomId: string;              // 聊天室ID（9位数字）
@@ -1064,6 +1179,7 @@ interface ChatRoom {
 ```
 
 ### 12.3 ChatRoomMember（聊天室成员）
+
 ```typescript
 interface ChatRoomMember {
   memberId: string;            // 成员ID
@@ -1080,6 +1196,7 @@ interface ChatRoomMember {
 ```
 
 ### 12.4 Message（消息）
+
 ```typescript
 interface Message {
   messageId: string;           // 消息ID
@@ -1099,6 +1216,7 @@ interface Message {
 ```
 
 ### 12.5 MuteRecord（禁言记录）
+
 ```typescript
 interface MuteRecord {
   recordId: string;
@@ -1113,6 +1231,7 @@ interface MuteRecord {
 ```
 
 ### 12.6 FriendRequest（好友请求）
+
 ```typescript
 interface FriendRequest {
   requestId: string;
@@ -1126,6 +1245,7 @@ interface FriendRequest {
 ```
 
 ### 12.7 Notification（通知）
+
 ```typescript
 interface Notification {
   notificationId: string;
@@ -1140,6 +1260,7 @@ interface Notification {
 ```
 
 ### 12.8 Report（举报）
+
 ```typescript
 interface Report {
   reportId: string;
@@ -1161,6 +1282,7 @@ interface Report {
 ## 13. 权限验证说明
 
 ### 13.1 消息权限
+
 - **发送消息**: 需要未被禁言（全局禁言或聊天室禁言）
 - **编辑自己的消息**: 所有成员
 - **编辑他人消息**: 管理员及以上
@@ -1168,6 +1290,7 @@ interface Report {
 - **删除他人消息**: 管理员及以上
 
 ### 13.2 成员管理权限
+
 - **邀请成员**: 所有成员
 - **踢出成员**: 管理员及以上
 - **禁言成员**: 管理员及以上
@@ -1175,10 +1298,12 @@ interface Report {
 - **取消管理员**: 仅房主
 
 ### 13.3 聊天室管理权限
+
 - **编辑聊天室信息**: 管理员及以上
 - **删除聊天室**: 仅房主
 
 ### 13.4 系统权限
+
 - **全局禁言**: 仅超级管理员
 - **封禁账号**: 仅超级管理员
 
@@ -1187,11 +1312,13 @@ interface Report {
 ## 14. 业务流程说明
 
 ### 14.1 用户注册登录流程
+
 1. 用户填写注册信息 → 后端验证 → 创建用户 → 返回token
 2. 前端保存token到localStorage
 3. 后续请求携带token在请求头中
 
 ### 14.2 加入聊天室流程
+
 1. 用户输入聊天室ID和密码
 2. 后端验证聊天室存在性和密码
 3. 创建ChatRoomMember记录
@@ -1199,6 +1326,7 @@ interface Report {
 5. 通过WebSocket通知其他成员
 
 ### 14.3 发送消息流程
+
 1. 前端通过WebSocket发送消息
 2. 后端验证权限（是否被禁言）
 3. 保存消息到数据库
@@ -1206,6 +1334,7 @@ interface Report {
 5. 更新未读消息计数
 
 ### 14.4 禁言流程
+
 1. 管理员点击禁言 → 前端验证权限
 2. 发送禁言请求到后端
 3. 后端验证权限并创建禁言记录
@@ -1218,18 +1347,21 @@ interface Report {
 ## 15. 安全性要求
 
 ### 15.1 认证安全
+
 - 使用JWT Token进行身份验证
 - Token有效期建议24小时
 - 支持刷新Token机制
 - 敏感操作（如修改密码）需要二次验证
 
 ### 15.2 数据验证
+
 - 所有输入必须进行严格的格式验证
 - 防止SQL注入、XSS攻击
 - 文件上传需要验证文件类型和大小
 - 限制请求频率，防止DOS攻击
 
 ### 15.3 隐私保护
+
 - 密码使用bcrypt加密存储
 - 敏感信息（手机号、邮箱）不在公开接口返回
 - 支持用户隐私设置
@@ -1240,17 +1372,20 @@ interface Report {
 ## 16. 性能优化建议
 
 ### 16.1 数据库优化
+
 - 对userId、roomId、messageId等建立索引
 - 消息表按聊天室分表或分区
 - 使用Redis缓存热点数据（在线用户、聊天室信息）
 
 ### 16.2 接口优化
+
 - 支持分页查询
 - 使用CDN存储静态资源（头像、文件）
 - 消息列表支持增量加载
 - WebSocket使用心跳保活
 
 ### 16.3 扩展性
+
 - 使用消息队列处理通知推送
 - 支持水平扩展（多个WebSocket服务器）
 - 数据库读写分离
@@ -1260,24 +1395,28 @@ interface Report {
 ## 17. 开发优先级建议
 
 ### P0（核心功能）
+
 - 用户注册/登录
 - 创建/加入聊天室
 - 发送/接收消息
 - WebSocket实时通信
 
 ### P1（重要功能）
+
 - 获取消息历史
 - 聊天室成员管理
 - 禁言功能
 - 文件上传
 
 ### P2（增强功能）
+
 - 好友系统
 - 通知系统
 - 消息编辑/撤回
 - 举报功能
 
 ### P3（优化功能）
+
 - 帮助中心
 - 反馈系统
 - 高级搜索
@@ -1286,6 +1425,7 @@ interface Report {
 ---
 
 **备注**:
+
 1. 所有时间格式使用ISO 8601标准（如：2025-11-23T10:00:00Z）
 2. 所有ID建议使用雪花算法或UUID生成，确保唯一性
 3. 建议使用版本控制（如 /api/v1/...）以便后续升级

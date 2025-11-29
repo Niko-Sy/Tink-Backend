@@ -11,14 +11,56 @@ import (
 	"time"
 )
 
+const archiveChatroom = `-- name: ArchiveChatroom :exec
+UPDATE chatrooms 
+SET room_status = 'archived'
+WHERE room_id = $1
+`
+
+// 归档聊天室
+func (q *Queries) ArchiveChatroom(ctx context.Context, roomID string) error {
+	_, err := q.exec(ctx, q.archiveChatroomStmt, archiveChatroom, roomID)
+	return err
+}
+
+const clearExpiredMutes = `-- name: ClearExpiredMutes :exec
+UPDATE chatroom_members 
+SET 
+    mute_status = 'not_muted',
+    mute_expires_at = NULL
+WHERE mute_status = 'muted' AND mute_expires_at IS NOT NULL AND mute_expires_at <= NOW()
+`
+
+// 清除过期的禁言
+func (q *Queries) ClearExpiredMutes(ctx context.Context) error {
+	_, err := q.exec(ctx, q.clearExpiredMutesStmt, clearExpiredMutes)
+	return err
+}
+
 const countChatroomMembers = `-- name: CountChatroomMembers :one
 SELECT COUNT(*) 
 FROM chatroom_members 
 WHERE room_id = $1 AND is_active = true
 `
 
+// 统计聊天室成员数量
 func (q *Queries) CountChatroomMembers(ctx context.Context, roomID string) (int64, error) {
 	row := q.queryRow(ctx, q.countChatroomMembersStmt, countChatroomMembers, roomID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countOnlineChatroomMembers = `-- name: CountOnlineChatroomMembers :one
+SELECT COUNT(*) 
+FROM chatroom_members cm
+JOIN users u ON cm.user_id = u.user_id
+WHERE cm.room_id = $1 AND cm.is_active = true AND u.online_status IN ('online', 'away', 'do_not_disturb')
+`
+
+// 统计聊天室在线成员数量
+func (q *Queries) CountOnlineChatroomMembers(ctx context.Context, roomID string) (int64, error) {
+	row := q.queryRow(ctx, q.countOnlineChatroomMembersStmt, countOnlineChatroomMembers, roomID)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -31,6 +73,7 @@ JOIN chatroom_members cm ON cr.room_id = cm.room_id
 WHERE cm.user_id = $1 AND cm.is_active = true AND cr.room_status = 'active'
 `
 
+// 统计用户加入的聊天室数量
 func (q *Queries) CountUserChatrooms(ctx context.Context, userID string) (int64, error) {
 	row := q.queryRow(ctx, q.countUserChatroomsStmt, countUserChatrooms, userID)
 	var count int64
@@ -39,6 +82,8 @@ func (q *Queries) CountUserChatrooms(ctx context.Context, userID string) (int64,
 }
 
 const createChatroom = `-- name: CreateChatroom :one
+
+
 INSERT INTO chatrooms (
     room_name,
     description,
@@ -69,6 +114,14 @@ type CreateChatroomParams struct {
 	AccessPassword sql.NullString `json:"access_password"`
 }
 
+// =============================================
+// 聊天室相关SQL查询 (Chatroom Queries)
+// 对应API: 聊天室管理接口 + 聊天室成员管理接口
+// =============================================
+// =============================================
+// 1. 聊天室基础操作 (Chatroom CRUD)
+// =============================================
+// 创建聊天室 POST /chatrooms
 func (q *Queries) CreateChatroom(ctx context.Context, arg CreateChatroomParams) (Chatroom, error) {
 	row := q.queryRow(ctx, q.createChatroomStmt, createChatroom,
 		arg.RoomName,
@@ -96,10 +149,11 @@ func (q *Queries) CreateChatroom(ctx context.Context, arg CreateChatroomParams) 
 
 const decrementChatroomMemberCount = `-- name: DecrementChatroomMemberCount :exec
 UPDATE chatrooms 
-SET member_count = member_count - 1
+SET member_count = GREATEST(member_count - 1, 0)
 WHERE room_id = $1
 `
 
+// 减少成员计数
 func (q *Queries) DecrementChatroomMemberCount(ctx context.Context, roomID string) error {
 	_, err := q.exec(ctx, q.decrementChatroomMemberCountStmt, decrementChatroomMemberCount, roomID)
 	return err
@@ -107,10 +161,11 @@ func (q *Queries) DecrementChatroomMemberCount(ctx context.Context, roomID strin
 
 const decrementChatroomOnlineCount = `-- name: DecrementChatroomOnlineCount :exec
 UPDATE chatrooms 
-SET online_count = online_count - 1
+SET online_count = GREATEST(online_count - 1, 0)
 WHERE room_id = $1
 `
 
+// 减少在线人数
 func (q *Queries) DecrementChatroomOnlineCount(ctx context.Context, roomID string) error {
 	_, err := q.exec(ctx, q.decrementChatroomOnlineCountStmt, decrementChatroomOnlineCount, roomID)
 	return err
@@ -122,9 +177,114 @@ SET room_status = 'deleted'
 WHERE room_id = $1
 `
 
+// 删除聊天室（软删除）DELETE /chatrooms/:roomId
 func (q *Queries) DeleteChatroom(ctx context.Context, roomID string) error {
 	_, err := q.exec(ctx, q.deleteChatroomStmt, deleteChatroom, roomID)
 	return err
+}
+
+const getActiveMembership = `-- name: GetActiveMembership :one
+SELECT 
+    member_rel_id,
+    user_id,
+    room_id,
+    joined_at,
+    left_at,
+    last_read_at,
+    member_role,
+    mute_status,
+    mute_expires_at,
+    is_active
+FROM chatroom_members 
+WHERE user_id = $1 AND room_id = $2 AND is_active = true
+`
+
+type GetActiveMembershipParams struct {
+	UserID string `json:"user_id"`
+	RoomID string `json:"room_id"`
+}
+
+// 获取有效的成员关系
+func (q *Queries) GetActiveMembership(ctx context.Context, arg GetActiveMembershipParams) (ChatroomMember, error) {
+	row := q.queryRow(ctx, q.getActiveMembershipStmt, getActiveMembership, arg.UserID, arg.RoomID)
+	var i ChatroomMember
+	err := row.Scan(
+		&i.MemberRelID,
+		&i.UserID,
+		&i.RoomID,
+		&i.JoinedAt,
+		&i.LeftAt,
+		&i.LastReadAt,
+		&i.MemberRole,
+		&i.MuteStatus,
+		&i.MuteExpiresAt,
+		&i.IsActive,
+	)
+	return i, err
+}
+
+const getChatroomAdmins = `-- name: GetChatroomAdmins :many
+SELECT 
+    u.user_id,
+    u.username,
+    u.nickname,
+    u.avatar_url,
+    u.online_status,
+    cm.member_rel_id,
+    cm.joined_at,
+    cm.member_role
+FROM chatroom_members cm
+JOIN users u ON cm.user_id = u.user_id
+WHERE cm.room_id = $1 AND cm.member_role IN ('owner', 'admin') AND cm.is_active = true
+ORDER BY 
+    CASE cm.member_role
+        WHEN 'owner' THEN 1
+        ELSE 2
+    END
+`
+
+type GetChatroomAdminsRow struct {
+	UserID       string               `json:"user_id"`
+	Username     string               `json:"username"`
+	Nickname     sql.NullString       `json:"nickname"`
+	AvatarUrl    sql.NullString       `json:"avatar_url"`
+	OnlineStatus NullUserOnlineStatus `json:"online_status"`
+	MemberRelID  string               `json:"member_rel_id"`
+	JoinedAt     time.Time            `json:"joined_at"`
+	MemberRole   MemberRole           `json:"member_role"`
+}
+
+// 获取聊天室管理员列表
+func (q *Queries) GetChatroomAdmins(ctx context.Context, roomID string) ([]GetChatroomAdminsRow, error) {
+	rows, err := q.query(ctx, q.getChatroomAdminsStmt, getChatroomAdmins, roomID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetChatroomAdminsRow{}
+	for rows.Next() {
+		var i GetChatroomAdminsRow
+		if err := rows.Scan(
+			&i.UserID,
+			&i.Username,
+			&i.Nickname,
+			&i.AvatarUrl,
+			&i.OnlineStatus,
+			&i.MemberRelID,
+			&i.JoinedAt,
+			&i.MemberRole,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const getChatroomByID = `-- name: GetChatroomByID :one
@@ -144,6 +304,7 @@ FROM chatrooms
 WHERE room_id = $1 AND room_status = 'active'
 `
 
+// 获取聊天室详情 GET /chatrooms/:roomId
 func (q *Queries) GetChatroomByID(ctx context.Context, roomID string) (Chatroom, error) {
 	row := q.queryRow(ctx, q.getChatroomByIDStmt, getChatroomByID, roomID)
 	var i Chatroom
@@ -164,6 +325,7 @@ func (q *Queries) GetChatroomByID(ctx context.Context, roomID string) (Chatroom,
 }
 
 const getChatroomMembers = `-- name: GetChatroomMembers :many
+
 SELECT 
     u.user_id,
     u.username,
@@ -175,11 +337,18 @@ SELECT
     cm.member_role,
     cm.mute_status,
     cm.mute_expires_at,
+    cm.last_read_at,
     cm.is_active
 FROM chatroom_members cm
 JOIN users u ON cm.user_id = u.user_id
 WHERE cm.room_id = $1 AND cm.is_active = true
-ORDER BY cm.joined_at ASC
+ORDER BY 
+    CASE cm.member_role
+        WHEN 'owner' THEN 1
+        WHEN 'admin' THEN 2
+        ELSE 3
+    END,
+    cm.joined_at ASC
 LIMIT $2 OFFSET $3
 `
 
@@ -200,9 +369,14 @@ type GetChatroomMembersRow struct {
 	MemberRole    MemberRole           `json:"member_role"`
 	MuteStatus    MemberMuteStatus     `json:"mute_status"`
 	MuteExpiresAt sql.NullTime         `json:"mute_expires_at"`
+	LastReadAt    sql.NullTime         `json:"last_read_at"`
 	IsActive      bool                 `json:"is_active"`
 }
 
+// =============================================
+// 4. 成员列表查询 (Member List Queries)
+// =============================================
+// 获取聊天室成员列表 GET /chatrooms/:roomId/members
 func (q *Queries) GetChatroomMembers(ctx context.Context, arg GetChatroomMembersParams) ([]GetChatroomMembersRow, error) {
 	rows, err := q.query(ctx, q.getChatroomMembersStmt, getChatroomMembers, arg.RoomID, arg.Limit, arg.Offset)
 	if err != nil {
@@ -212,6 +386,310 @@ func (q *Queries) GetChatroomMembers(ctx context.Context, arg GetChatroomMembers
 	items := []GetChatroomMembersRow{}
 	for rows.Next() {
 		var i GetChatroomMembersRow
+		if err := rows.Scan(
+			&i.UserID,
+			&i.Username,
+			&i.Nickname,
+			&i.AvatarUrl,
+			&i.OnlineStatus,
+			&i.MemberRelID,
+			&i.JoinedAt,
+			&i.MemberRole,
+			&i.MuteStatus,
+			&i.MuteExpiresAt,
+			&i.LastReadAt,
+			&i.IsActive,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getChatroomOwner = `-- name: GetChatroomOwner :one
+SELECT 
+    u.user_id,
+    u.username,
+    u.nickname,
+    u.avatar_url,
+    u.online_status,
+    cm.member_rel_id,
+    cm.joined_at,
+    cm.member_role
+FROM chatroom_members cm
+JOIN users u ON cm.user_id = u.user_id
+WHERE cm.room_id = $1 AND cm.member_role = 'owner' AND cm.is_active = true
+`
+
+type GetChatroomOwnerRow struct {
+	UserID       string               `json:"user_id"`
+	Username     string               `json:"username"`
+	Nickname     sql.NullString       `json:"nickname"`
+	AvatarUrl    sql.NullString       `json:"avatar_url"`
+	OnlineStatus NullUserOnlineStatus `json:"online_status"`
+	MemberRelID  string               `json:"member_rel_id"`
+	JoinedAt     time.Time            `json:"joined_at"`
+	MemberRole   MemberRole           `json:"member_role"`
+}
+
+// 获取聊天室房主
+func (q *Queries) GetChatroomOwner(ctx context.Context, roomID string) (GetChatroomOwnerRow, error) {
+	row := q.queryRow(ctx, q.getChatroomOwnerStmt, getChatroomOwner, roomID)
+	var i GetChatroomOwnerRow
+	err := row.Scan(
+		&i.UserID,
+		&i.Username,
+		&i.Nickname,
+		&i.AvatarUrl,
+		&i.OnlineStatus,
+		&i.MemberRelID,
+		&i.JoinedAt,
+		&i.MemberRole,
+	)
+	return i, err
+}
+
+const getChatroomWithoutPassword = `-- name: GetChatroomWithoutPassword :one
+SELECT 
+    room_id,
+    room_name,
+    description,
+    icon_url,
+    room_type,
+    member_count,
+    online_count,
+    room_status,
+    created_at,
+    last_active_at
+FROM chatrooms 
+WHERE room_id = $1 AND room_status = 'active'
+`
+
+type GetChatroomWithoutPasswordRow struct {
+	RoomID       string         `json:"room_id"`
+	RoomName     string         `json:"room_name"`
+	Description  sql.NullString `json:"description"`
+	IconUrl      sql.NullString `json:"icon_url"`
+	RoomType     ChatroomType   `json:"room_type"`
+	MemberCount  int32          `json:"member_count"`
+	OnlineCount  int32          `json:"online_count"`
+	RoomStatus   ChatroomStatus `json:"room_status"`
+	CreatedAt    time.Time      `json:"created_at"`
+	LastActiveAt sql.NullTime   `json:"last_active_at"`
+}
+
+// 获取聊天室详情（不含密码，用于公开展示）
+func (q *Queries) GetChatroomWithoutPassword(ctx context.Context, roomID string) (GetChatroomWithoutPasswordRow, error) {
+	row := q.queryRow(ctx, q.getChatroomWithoutPasswordStmt, getChatroomWithoutPassword, roomID)
+	var i GetChatroomWithoutPasswordRow
+	err := row.Scan(
+		&i.RoomID,
+		&i.RoomName,
+		&i.Description,
+		&i.IconUrl,
+		&i.RoomType,
+		&i.MemberCount,
+		&i.OnlineCount,
+		&i.RoomStatus,
+		&i.CreatedAt,
+		&i.LastActiveAt,
+	)
+	return i, err
+}
+
+const getMemberByRelID = `-- name: GetMemberByRelID :one
+SELECT 
+    member_rel_id,
+    user_id,
+    room_id,
+    joined_at,
+    left_at,
+    last_read_at,
+    member_role,
+    mute_status,
+    mute_expires_at,
+    is_active
+FROM chatroom_members 
+WHERE member_rel_id = $1
+`
+
+// 通过关系ID获取成员信息
+func (q *Queries) GetMemberByRelID(ctx context.Context, memberRelID string) (ChatroomMember, error) {
+	row := q.queryRow(ctx, q.getMemberByRelIDStmt, getMemberByRelID, memberRelID)
+	var i ChatroomMember
+	err := row.Scan(
+		&i.MemberRelID,
+		&i.UserID,
+		&i.RoomID,
+		&i.JoinedAt,
+		&i.LeftAt,
+		&i.LastReadAt,
+		&i.MemberRole,
+		&i.MuteStatus,
+		&i.MuteExpiresAt,
+		&i.IsActive,
+	)
+	return i, err
+}
+
+const getMemberLastReadTime = `-- name: GetMemberLastReadTime :one
+SELECT last_read_at 
+FROM chatroom_members 
+WHERE user_id = $1 AND room_id = $2 AND is_active = true
+`
+
+type GetMemberLastReadTimeParams struct {
+	UserID string `json:"user_id"`
+	RoomID string `json:"room_id"`
+}
+
+// 获取成员最后阅读时间
+func (q *Queries) GetMemberLastReadTime(ctx context.Context, arg GetMemberLastReadTimeParams) (sql.NullTime, error) {
+	row := q.queryRow(ctx, q.getMemberLastReadTimeStmt, getMemberLastReadTime, arg.UserID, arg.RoomID)
+	var last_read_at sql.NullTime
+	err := row.Scan(&last_read_at)
+	return last_read_at, err
+}
+
+const getMemberRole = `-- name: GetMemberRole :one
+SELECT member_role 
+FROM chatroom_members 
+WHERE user_id = $1 AND room_id = $2 AND is_active = true
+`
+
+type GetMemberRoleParams struct {
+	UserID string `json:"user_id"`
+	RoomID string `json:"room_id"`
+}
+
+// 获取成员角色
+func (q *Queries) GetMemberRole(ctx context.Context, arg GetMemberRoleParams) (MemberRole, error) {
+	row := q.queryRow(ctx, q.getMemberRoleStmt, getMemberRole, arg.UserID, arg.RoomID)
+	var member_role MemberRole
+	err := row.Scan(&member_role)
+	return member_role, err
+}
+
+const getMutedMembers = `-- name: GetMutedMembers :many
+SELECT 
+    u.user_id,
+    u.username,
+    u.nickname,
+    u.avatar_url,
+    cm.member_rel_id,
+    cm.mute_status,
+    cm.mute_expires_at
+FROM chatroom_members cm
+JOIN users u ON cm.user_id = u.user_id
+WHERE cm.room_id = $1 AND cm.is_active = true AND cm.mute_status = 'muted'
+ORDER BY cm.mute_expires_at DESC NULLS FIRST
+`
+
+type GetMutedMembersRow struct {
+	UserID        string           `json:"user_id"`
+	Username      string           `json:"username"`
+	Nickname      sql.NullString   `json:"nickname"`
+	AvatarUrl     sql.NullString   `json:"avatar_url"`
+	MemberRelID   string           `json:"member_rel_id"`
+	MuteStatus    MemberMuteStatus `json:"mute_status"`
+	MuteExpiresAt sql.NullTime     `json:"mute_expires_at"`
+}
+
+// 获取被禁言的成员列表
+func (q *Queries) GetMutedMembers(ctx context.Context, roomID string) ([]GetMutedMembersRow, error) {
+	rows, err := q.query(ctx, q.getMutedMembersStmt, getMutedMembers, roomID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetMutedMembersRow{}
+	for rows.Next() {
+		var i GetMutedMembersRow
+		if err := rows.Scan(
+			&i.UserID,
+			&i.Username,
+			&i.Nickname,
+			&i.AvatarUrl,
+			&i.MemberRelID,
+			&i.MuteStatus,
+			&i.MuteExpiresAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getOnlineChatroomMembers = `-- name: GetOnlineChatroomMembers :many
+SELECT 
+    u.user_id,
+    u.username,
+    u.nickname,
+    u.avatar_url,
+    u.online_status,
+    cm.member_rel_id,
+    cm.joined_at,
+    cm.member_role,
+    cm.mute_status,
+    cm.mute_expires_at,
+    cm.is_active
+FROM chatroom_members cm
+JOIN users u ON cm.user_id = u.user_id
+WHERE cm.room_id = $1 AND cm.is_active = true AND u.online_status IN ('online', 'away', 'do_not_disturb')
+ORDER BY 
+    CASE cm.member_role
+        WHEN 'owner' THEN 1
+        WHEN 'admin' THEN 2
+        ELSE 3
+    END,
+    cm.joined_at ASC
+LIMIT $2 OFFSET $3
+`
+
+type GetOnlineChatroomMembersParams struct {
+	RoomID string `json:"room_id"`
+	Limit  int64  `json:"limit"`
+	Offset int64  `json:"offset"`
+}
+
+type GetOnlineChatroomMembersRow struct {
+	UserID        string               `json:"user_id"`
+	Username      string               `json:"username"`
+	Nickname      sql.NullString       `json:"nickname"`
+	AvatarUrl     sql.NullString       `json:"avatar_url"`
+	OnlineStatus  NullUserOnlineStatus `json:"online_status"`
+	MemberRelID   string               `json:"member_rel_id"`
+	JoinedAt      time.Time            `json:"joined_at"`
+	MemberRole    MemberRole           `json:"member_role"`
+	MuteStatus    MemberMuteStatus     `json:"mute_status"`
+	MuteExpiresAt sql.NullTime         `json:"mute_expires_at"`
+	IsActive      bool                 `json:"is_active"`
+}
+
+// 获取聊天室在线成员列表 GET /chatrooms/:roomId/members?status=online
+func (q *Queries) GetOnlineChatroomMembers(ctx context.Context, arg GetOnlineChatroomMembersParams) ([]GetOnlineChatroomMembersRow, error) {
+	rows, err := q.query(ctx, q.getOnlineChatroomMembersStmt, getOnlineChatroomMembers, arg.RoomID, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetOnlineChatroomMembersRow{}
+	for rows.Next() {
+		var i GetOnlineChatroomMembersRow
 		if err := rows.Scan(
 			&i.UserID,
 			&i.Username,
@@ -259,6 +737,7 @@ type GetUserChatroomMembershipParams struct {
 	RoomID string `json:"room_id"`
 }
 
+// 获取用户在聊天室的成员信息 GET /chatrooms/:roomId/members/:userId
 func (q *Queries) GetUserChatroomMembership(ctx context.Context, arg GetUserChatroomMembershipParams) (ChatroomMember, error) {
 	row := q.queryRow(ctx, q.getUserChatroomMembershipStmt, getUserChatroomMembership, arg.UserID, arg.RoomID)
 	var i ChatroomMember
@@ -278,11 +757,16 @@ func (q *Queries) GetUserChatroomMembership(ctx context.Context, arg GetUserChat
 }
 
 const incrementChatroomMemberCount = `-- name: IncrementChatroomMemberCount :exec
+
 UPDATE chatrooms 
 SET member_count = member_count + 1
 WHERE room_id = $1
 `
 
+// =============================================
+// 8. 聊天室统计 (Chatroom Statistics)
+// =============================================
+// 增加成员计数
 func (q *Queries) IncrementChatroomMemberCount(ctx context.Context, roomID string) error {
 	_, err := q.exec(ctx, q.incrementChatroomMemberCountStmt, incrementChatroomMemberCount, roomID)
 	return err
@@ -294,9 +778,24 @@ SET online_count = online_count + 1
 WHERE room_id = $1
 `
 
+// 增加在线人数
 func (q *Queries) IncrementChatroomOnlineCount(ctx context.Context, roomID string) error {
 	_, err := q.exec(ctx, q.incrementChatroomOnlineCountStmt, incrementChatroomOnlineCount, roomID)
 	return err
+}
+
+const isChatroomPublic = `-- name: IsChatroomPublic :one
+SELECT room_type = 'public' AS is_public
+FROM chatrooms 
+WHERE room_id = $1 AND room_status = 'active'
+`
+
+// 检查聊天室是否为公开
+func (q *Queries) IsChatroomPublic(ctx context.Context, roomID string) (bool, error) {
+	row := q.queryRow(ctx, q.isChatroomPublicStmt, isChatroomPublic, roomID)
+	var is_public bool
+	err := row.Scan(&is_public)
+	return is_public, err
 }
 
 const isMemberMuted = `-- name: IsMemberMuted :one
@@ -315,6 +814,7 @@ type IsMemberMutedParams struct {
 	RoomID string `json:"room_id"`
 }
 
+// 检查成员是否被禁言
 func (q *Queries) IsMemberMuted(ctx context.Context, arg IsMemberMutedParams) (bool, error) {
 	row := q.queryRow(ctx, q.isMemberMutedStmt, isMemberMuted, arg.UserID, arg.RoomID)
 	var is_muted bool
@@ -322,19 +822,81 @@ func (q *Queries) IsMemberMuted(ctx context.Context, arg IsMemberMutedParams) (b
 	return is_muted, err
 }
 
+const isUserAdminOrOwner = `-- name: IsUserAdminOrOwner :one
+SELECT EXISTS(
+    SELECT 1 FROM chatroom_members 
+    WHERE user_id = $1 AND room_id = $2 AND member_role IN ('owner', 'admin') AND is_active = true
+) AS is_admin_or_owner
+`
+
+type IsUserAdminOrOwnerParams struct {
+	UserID string `json:"user_id"`
+	RoomID string `json:"room_id"`
+}
+
+// 检查用户是否为管理员或房主
+func (q *Queries) IsUserAdminOrOwner(ctx context.Context, arg IsUserAdminOrOwnerParams) (bool, error) {
+	row := q.queryRow(ctx, q.isUserAdminOrOwnerStmt, isUserAdminOrOwner, arg.UserID, arg.RoomID)
+	var is_admin_or_owner bool
+	err := row.Scan(&is_admin_or_owner)
+	return is_admin_or_owner, err
+}
+
+const isUserInChatroom = `-- name: IsUserInChatroom :one
+SELECT EXISTS(
+    SELECT 1 FROM chatroom_members 
+    WHERE user_id = $1 AND room_id = $2 AND is_active = true
+) AS is_member
+`
+
+type IsUserInChatroomParams struct {
+	UserID string `json:"user_id"`
+	RoomID string `json:"room_id"`
+}
+
+// 检查用户是否在聊天室中
+func (q *Queries) IsUserInChatroom(ctx context.Context, arg IsUserInChatroomParams) (bool, error) {
+	row := q.queryRow(ctx, q.isUserInChatroomStmt, isUserInChatroom, arg.UserID, arg.RoomID)
+	var is_member bool
+	err := row.Scan(&is_member)
+	return is_member, err
+}
+
+const isUserOwner = `-- name: IsUserOwner :one
+SELECT EXISTS(
+    SELECT 1 FROM chatroom_members 
+    WHERE user_id = $1 AND room_id = $2 AND member_role = 'owner' AND is_active = true
+) AS is_owner
+`
+
+type IsUserOwnerParams struct {
+	UserID string `json:"user_id"`
+	RoomID string `json:"room_id"`
+}
+
+// 检查用户是否为房主
+func (q *Queries) IsUserOwner(ctx context.Context, arg IsUserOwnerParams) (bool, error) {
+	row := q.queryRow(ctx, q.isUserOwnerStmt, isUserOwner, arg.UserID, arg.RoomID)
+	var is_owner bool
+	err := row.Scan(&is_owner)
+	return is_owner, err
+}
+
 const joinChatroom = `-- name: JoinChatroom :one
+
 INSERT INTO chatroom_members (
     user_id,
     room_id,
     member_role
 ) VALUES (
-    $1, $2, 'member'
+    $1, $2, $3
 ) 
 ON CONFLICT (user_id, room_id) 
 DO UPDATE SET 
     is_active = true,
     joined_at = NOW(),
-    left_at = NULL
+    left_at = NULL,
+    member_role = EXCLUDED.member_role
 RETURNING 
     member_rel_id,
     user_id,
@@ -349,12 +911,17 @@ RETURNING
 `
 
 type JoinChatroomParams struct {
-	UserID string `json:"user_id"`
-	RoomID string `json:"room_id"`
+	UserID     string     `json:"user_id"`
+	RoomID     string     `json:"room_id"`
+	MemberRole MemberRole `json:"member_role"`
 }
 
+// =============================================
+// 3. 聊天室成员操作 (Member Operations)
+// =============================================
+// 加入聊天室 POST /chatrooms/:roomId/join
 func (q *Queries) JoinChatroom(ctx context.Context, arg JoinChatroomParams) (ChatroomMember, error) {
-	row := q.queryRow(ctx, q.joinChatroomStmt, joinChatroom, arg.UserID, arg.RoomID)
+	row := q.queryRow(ctx, q.joinChatroomStmt, joinChatroom, arg.UserID, arg.RoomID, arg.MemberRole)
 	var i ChatroomMember
 	err := row.Scan(
 		&i.MemberRelID,
@@ -371,6 +938,25 @@ func (q *Queries) JoinChatroom(ctx context.Context, arg JoinChatroomParams) (Cha
 	return i, err
 }
 
+const kickMember = `-- name: KickMember :exec
+UPDATE chatroom_members 
+SET 
+    is_active = false,
+    left_at = NOW()
+WHERE user_id = $1 AND room_id = $2
+`
+
+type KickMemberParams struct {
+	UserID string `json:"user_id"`
+	RoomID string `json:"room_id"`
+}
+
+// 踢出成员 POST /chatrooms/:roomId/members/:userId/kick
+func (q *Queries) KickMember(ctx context.Context, arg KickMemberParams) error {
+	_, err := q.exec(ctx, q.kickMemberStmt, kickMember, arg.UserID, arg.RoomID)
+	return err
+}
+
 const leaveChatroom = `-- name: LeaveChatroom :exec
 UPDATE chatroom_members 
 SET 
@@ -384,19 +970,88 @@ type LeaveChatroomParams struct {
 	RoomID string `json:"room_id"`
 }
 
+// 退出聊天室 POST /chatrooms/:roomId/leave
 func (q *Queries) LeaveChatroom(ctx context.Context, arg LeaveChatroomParams) error {
 	_, err := q.exec(ctx, q.leaveChatroomStmt, leaveChatroom, arg.UserID, arg.RoomID)
 	return err
 }
 
+const listPublicChatrooms = `-- name: ListPublicChatrooms :many
+SELECT 
+    room_id,
+    room_name,
+    description,
+    icon_url,
+    room_type,
+    member_count,
+    online_count,
+    created_at,
+    last_active_at
+FROM chatrooms 
+WHERE room_type = 'public' AND room_status = 'active'
+ORDER BY online_count DESC, member_count DESC
+LIMIT $1 OFFSET $2
+`
+
+type ListPublicChatroomsParams struct {
+	Limit  int64 `json:"limit"`
+	Offset int64 `json:"offset"`
+}
+
+type ListPublicChatroomsRow struct {
+	RoomID       string         `json:"room_id"`
+	RoomName     string         `json:"room_name"`
+	Description  sql.NullString `json:"description"`
+	IconUrl      sql.NullString `json:"icon_url"`
+	RoomType     ChatroomType   `json:"room_type"`
+	MemberCount  int32          `json:"member_count"`
+	OnlineCount  int32          `json:"online_count"`
+	CreatedAt    time.Time      `json:"created_at"`
+	LastActiveAt sql.NullTime   `json:"last_active_at"`
+}
+
+// 获取公开聊天室列表
+func (q *Queries) ListPublicChatrooms(ctx context.Context, arg ListPublicChatroomsParams) ([]ListPublicChatroomsRow, error) {
+	rows, err := q.query(ctx, q.listPublicChatroomsStmt, listPublicChatrooms, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListPublicChatroomsRow{}
+	for rows.Next() {
+		var i ListPublicChatroomsRow
+		if err := rows.Scan(
+			&i.RoomID,
+			&i.RoomName,
+			&i.Description,
+			&i.IconUrl,
+			&i.RoomType,
+			&i.MemberCount,
+			&i.OnlineCount,
+			&i.CreatedAt,
+			&i.LastActiveAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listUserChatrooms = `-- name: ListUserChatrooms :many
+
 SELECT 
     cr.room_id,
     cr.room_name,
     cr.description,
     cr.icon_url,
     cr.room_type,
-    cr.access_password,
     cr.member_count,
     cr.online_count,
     cr.room_status,
@@ -406,11 +1061,13 @@ SELECT
     cm.joined_at,
     cm.member_role,
     cm.mute_status,
+    cm.mute_expires_at,
+    cm.last_read_at,
     cm.is_active
 FROM chatrooms cr
 JOIN chatroom_members cm ON cr.room_id = cm.room_id
 WHERE cm.user_id = $1 AND cm.is_active = true AND cr.room_status = 'active'
-ORDER BY cr.last_active_at DESC
+ORDER BY cr.last_active_at DESC NULLS LAST
 LIMIT $2 OFFSET $3
 `
 
@@ -421,24 +1078,29 @@ type ListUserChatroomsParams struct {
 }
 
 type ListUserChatroomsRow struct {
-	RoomID         string           `json:"room_id"`
-	RoomName       string           `json:"room_name"`
-	Description    sql.NullString   `json:"description"`
-	IconUrl        sql.NullString   `json:"icon_url"`
-	RoomType       ChatroomType     `json:"room_type"`
-	AccessPassword sql.NullString   `json:"access_password"`
-	MemberCount    int32            `json:"member_count"`
-	OnlineCount    int32            `json:"online_count"`
-	RoomStatus     ChatroomStatus   `json:"room_status"`
-	CreatedAt      time.Time        `json:"created_at"`
-	LastActiveAt   sql.NullTime     `json:"last_active_at"`
-	MemberRelID    string           `json:"member_rel_id"`
-	JoinedAt       time.Time        `json:"joined_at"`
-	MemberRole     MemberRole       `json:"member_role"`
-	MuteStatus     MemberMuteStatus `json:"mute_status"`
-	IsActive       bool             `json:"is_active"`
+	RoomID        string           `json:"room_id"`
+	RoomName      string           `json:"room_name"`
+	Description   sql.NullString   `json:"description"`
+	IconUrl       sql.NullString   `json:"icon_url"`
+	RoomType      ChatroomType     `json:"room_type"`
+	MemberCount   int32            `json:"member_count"`
+	OnlineCount   int32            `json:"online_count"`
+	RoomStatus    ChatroomStatus   `json:"room_status"`
+	CreatedAt     time.Time        `json:"created_at"`
+	LastActiveAt  sql.NullTime     `json:"last_active_at"`
+	MemberRelID   string           `json:"member_rel_id"`
+	JoinedAt      time.Time        `json:"joined_at"`
+	MemberRole    MemberRole       `json:"member_role"`
+	MuteStatus    MemberMuteStatus `json:"mute_status"`
+	MuteExpiresAt sql.NullTime     `json:"mute_expires_at"`
+	LastReadAt    sql.NullTime     `json:"last_read_at"`
+	IsActive      bool             `json:"is_active"`
 }
 
+// =============================================
+// 2. 聊天室列表查询 (Chatroom List Queries)
+// =============================================
+// 获取用户的聊天室列表 GET /users/me/chatrooms
 func (q *Queries) ListUserChatrooms(ctx context.Context, arg ListUserChatroomsParams) ([]ListUserChatroomsRow, error) {
 	rows, err := q.query(ctx, q.listUserChatroomsStmt, listUserChatrooms, arg.UserID, arg.Limit, arg.Offset)
 	if err != nil {
@@ -454,7 +1116,6 @@ func (q *Queries) ListUserChatrooms(ctx context.Context, arg ListUserChatroomsPa
 			&i.Description,
 			&i.IconUrl,
 			&i.RoomType,
-			&i.AccessPassword,
 			&i.MemberCount,
 			&i.OnlineCount,
 			&i.RoomStatus,
@@ -464,6 +1125,8 @@ func (q *Queries) ListUserChatrooms(ctx context.Context, arg ListUserChatroomsPa
 			&i.JoinedAt,
 			&i.MemberRole,
 			&i.MuteStatus,
+			&i.MuteExpiresAt,
+			&i.LastReadAt,
 			&i.IsActive,
 		); err != nil {
 			return nil, err
@@ -480,11 +1143,12 @@ func (q *Queries) ListUserChatrooms(ctx context.Context, arg ListUserChatroomsPa
 }
 
 const muteMember = `-- name: MuteMember :exec
+
 UPDATE chatroom_members 
 SET 
     mute_status = 'muted',
     mute_expires_at = $3
-WHERE user_id = $1 AND room_id = $2
+WHERE user_id = $1 AND room_id = $2 AND is_active = true
 `
 
 type MuteMemberParams struct {
@@ -493,15 +1157,129 @@ type MuteMemberParams struct {
 	MuteExpiresAt sql.NullTime `json:"mute_expires_at"`
 }
 
+// =============================================
+// 6. 禁言管理 (Mute Management)
+// =============================================
+// 禁言成员 POST /chatrooms/:roomId/members/:userId/mute
 func (q *Queries) MuteMember(ctx context.Context, arg MuteMemberParams) error {
 	_, err := q.exec(ctx, q.muteMemberStmt, muteMember, arg.UserID, arg.RoomID, arg.MuteExpiresAt)
 	return err
 }
 
+const removeMemberAdmin = `-- name: RemoveMemberAdmin :exec
+UPDATE chatroom_members 
+SET member_role = 'member'
+WHERE user_id = $1 AND room_id = $2 AND is_active = true
+`
+
+type RemoveMemberAdminParams struct {
+	UserID string `json:"user_id"`
+	RoomID string `json:"room_id"`
+}
+
+// 取消管理员 POST /chatrooms/:roomId/members/:userId/remove-admin
+func (q *Queries) RemoveMemberAdmin(ctx context.Context, arg RemoveMemberAdminParams) error {
+	_, err := q.exec(ctx, q.removeMemberAdminStmt, removeMemberAdmin, arg.UserID, arg.RoomID)
+	return err
+}
+
+const searchChatrooms = `-- name: SearchChatrooms :many
+SELECT 
+    room_id,
+    room_name,
+    description,
+    icon_url,
+    room_type,
+    member_count,
+    online_count,
+    created_at,
+    last_active_at
+FROM chatrooms 
+WHERE 
+    room_status = 'active'
+    AND room_type = 'public'
+    AND (
+        room_name ILIKE '%' || $1 || '%' 
+        OR description ILIKE '%' || $1 || '%'
+    )
+ORDER BY member_count DESC
+LIMIT $2 OFFSET $3
+`
+
+type SearchChatroomsParams struct {
+	Column1 sql.NullString `json:"column_1"`
+	Limit   int64          `json:"limit"`
+	Offset  int64          `json:"offset"`
+}
+
+type SearchChatroomsRow struct {
+	RoomID       string         `json:"room_id"`
+	RoomName     string         `json:"room_name"`
+	Description  sql.NullString `json:"description"`
+	IconUrl      sql.NullString `json:"icon_url"`
+	RoomType     ChatroomType   `json:"room_type"`
+	MemberCount  int32          `json:"member_count"`
+	OnlineCount  int32          `json:"online_count"`
+	CreatedAt    time.Time      `json:"created_at"`
+	LastActiveAt sql.NullTime   `json:"last_active_at"`
+}
+
+// 搜索聊天室
+func (q *Queries) SearchChatrooms(ctx context.Context, arg SearchChatroomsParams) ([]SearchChatroomsRow, error) {
+	rows, err := q.query(ctx, q.searchChatroomsStmt, searchChatrooms, arg.Column1, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []SearchChatroomsRow{}
+	for rows.Next() {
+		var i SearchChatroomsRow
+		if err := rows.Scan(
+			&i.RoomID,
+			&i.RoomName,
+			&i.Description,
+			&i.IconUrl,
+			&i.RoomType,
+			&i.MemberCount,
+			&i.OnlineCount,
+			&i.CreatedAt,
+			&i.LastActiveAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const setMemberAsAdmin = `-- name: SetMemberAsAdmin :exec
+UPDATE chatroom_members 
+SET member_role = 'admin'
+WHERE user_id = $1 AND room_id = $2 AND is_active = true
+`
+
+type SetMemberAsAdminParams struct {
+	UserID string `json:"user_id"`
+	RoomID string `json:"room_id"`
+}
+
+// 设置管理员 POST /chatrooms/:roomId/members/:userId/set-admin
+func (q *Queries) SetMemberAsAdmin(ctx context.Context, arg SetMemberAsAdminParams) error {
+	_, err := q.exec(ctx, q.setMemberAsAdminStmt, setMemberAsAdmin, arg.UserID, arg.RoomID)
+	return err
+}
+
 const setMemberRole = `-- name: SetMemberRole :exec
+
 UPDATE chatroom_members 
 SET member_role = $3
-WHERE user_id = $1 AND room_id = $2
+WHERE user_id = $1 AND room_id = $2 AND is_active = true
 `
 
 type SetMemberRoleParams struct {
@@ -510,8 +1288,66 @@ type SetMemberRoleParams struct {
 	MemberRole MemberRole `json:"member_role"`
 }
 
+// =============================================
+// 5. 成员角色管理 (Member Role Management)
+// =============================================
+// 设置成员角色 POST /chatrooms/:roomId/members/:userId/set-admin
 func (q *Queries) SetMemberRole(ctx context.Context, arg SetMemberRoleParams) error {
 	_, err := q.exec(ctx, q.setMemberRoleStmt, setMemberRole, arg.UserID, arg.RoomID, arg.MemberRole)
+	return err
+}
+
+const syncChatroomMemberCount = `-- name: SyncChatroomMemberCount :exec
+UPDATE chatrooms 
+SET member_count = (
+    SELECT COUNT(*) FROM chatroom_members 
+    WHERE room_id = chatrooms.room_id AND is_active = true
+)
+WHERE room_id = $1
+`
+
+// 同步成员计数（用于数据修复）
+func (q *Queries) SyncChatroomMemberCount(ctx context.Context, dollar_1 sql.NullString) error {
+	_, err := q.exec(ctx, q.syncChatroomMemberCountStmt, syncChatroomMemberCount, dollar_1)
+	return err
+}
+
+const syncChatroomOnlineCount = `-- name: SyncChatroomOnlineCount :exec
+UPDATE chatrooms 
+SET online_count = (
+    SELECT COUNT(*) FROM chatroom_members cm
+    JOIN users u ON cm.user_id = u.user_id
+    WHERE cm.room_id = chatrooms.room_id AND cm.is_active = true 
+    AND u.online_status IN ('online', 'away', 'do_not_disturb')
+)
+WHERE room_id = $1
+`
+
+// 同步在线人数（用于数据修复）
+func (q *Queries) SyncChatroomOnlineCount(ctx context.Context, dollar_1 sql.NullString) error {
+	_, err := q.exec(ctx, q.syncChatroomOnlineCountStmt, syncChatroomOnlineCount, dollar_1)
+	return err
+}
+
+const transferOwnership = `-- name: TransferOwnership :exec
+UPDATE chatroom_members 
+SET member_role = CASE 
+    WHEN user_id = $1 THEN 'member'
+    WHEN user_id = $2 THEN 'owner'
+    ELSE member_role
+END
+WHERE room_id = $3 AND user_id IN ($1, $2) AND is_active = true
+`
+
+type TransferOwnershipParams struct {
+	UserID   string `json:"user_id"`
+	UserID_2 string `json:"user_id_2"`
+	RoomID   string `json:"room_id"`
+}
+
+// 转让房主
+func (q *Queries) TransferOwnership(ctx context.Context, arg TransferOwnershipParams) error {
+	_, err := q.exec(ctx, q.transferOwnershipStmt, transferOwnership, arg.UserID, arg.UserID_2, arg.RoomID)
 	return err
 }
 
@@ -520,7 +1356,7 @@ UPDATE chatroom_members
 SET 
     mute_status = 'not_muted',
     mute_expires_at = NULL
-WHERE user_id = $1 AND room_id = $2
+WHERE user_id = $1 AND room_id = $2 AND is_active = true
 `
 
 type UnmuteMemberParams struct {
@@ -528,6 +1364,7 @@ type UnmuteMemberParams struct {
 	RoomID string `json:"room_id"`
 }
 
+// 解除禁言 POST /chatrooms/:roomId/members/:userId/unmute
 func (q *Queries) UnmuteMember(ctx context.Context, arg UnmuteMemberParams) error {
 	_, err := q.exec(ctx, q.unmuteMemberStmt, unmuteMember, arg.UserID, arg.RoomID)
 	return err
@@ -536,13 +1373,13 @@ func (q *Queries) UnmuteMember(ctx context.Context, arg UnmuteMemberParams) erro
 const updateChatroom = `-- name: UpdateChatroom :one
 UPDATE chatrooms 
 SET 
-    room_name = $2,
-    description = $3,
-    icon_url = $4,
-    room_type = $5,
-    access_password = $6,
+    room_name = COALESCE($2, room_name),
+    description = COALESCE($3, description),
+    icon_url = COALESCE($4, icon_url),
+    room_type = COALESCE($5, room_type),
+    access_password = COALESCE($6, access_password),
     last_active_at = NOW()
-WHERE room_id = $1
+WHERE room_id = $1 AND room_status = 'active'
 RETURNING 
     room_id,
     room_name,
@@ -566,6 +1403,7 @@ type UpdateChatroomParams struct {
 	AccessPassword sql.NullString `json:"access_password"`
 }
 
+// 更新聊天室信息 PUT /chatrooms/:roomId
 func (q *Queries) UpdateChatroom(ctx context.Context, arg UpdateChatroomParams) (Chatroom, error) {
 	row := q.queryRow(ctx, q.updateChatroomStmt, updateChatroom,
 		arg.RoomID,
@@ -598,15 +1436,17 @@ SET last_active_at = NOW()
 WHERE room_id = $1
 `
 
+// 更新最后活跃时间
 func (q *Queries) UpdateChatroomLastActiveTime(ctx context.Context, roomID string) error {
 	_, err := q.exec(ctx, q.updateChatroomLastActiveTimeStmt, updateChatroomLastActiveTime, roomID)
 	return err
 }
 
 const updateMemberLastReadTime = `-- name: UpdateMemberLastReadTime :exec
+
 UPDATE chatroom_members 
 SET last_read_at = NOW()
-WHERE user_id = $1 AND room_id = $2
+WHERE user_id = $1 AND room_id = $2 AND is_active = true
 `
 
 type UpdateMemberLastReadTimeParams struct {
@@ -614,7 +1454,49 @@ type UpdateMemberLastReadTimeParams struct {
 	RoomID string `json:"room_id"`
 }
 
+// =============================================
+// 7. 消息已读管理 (Read Status Management)
+// =============================================
+// 更新最后阅读时间 POST /chatrooms/:roomId/messages/read
 func (q *Queries) UpdateMemberLastReadTime(ctx context.Context, arg UpdateMemberLastReadTimeParams) error {
 	_, err := q.exec(ctx, q.updateMemberLastReadTimeStmt, updateMemberLastReadTime, arg.UserID, arg.RoomID)
 	return err
+}
+
+const updateMemberLastReadToMessage = `-- name: UpdateMemberLastReadToMessage :exec
+UPDATE chatroom_members 
+SET last_read_at = (SELECT sent_at FROM messages WHERE message_id = $3)
+WHERE user_id = $1 AND room_id = $2 AND is_active = true
+`
+
+type UpdateMemberLastReadToMessageParams struct {
+	Column1 sql.NullString `json:"column_1"`
+	Column2 sql.NullString `json:"column_2"`
+	Column3 sql.NullString `json:"column_3"`
+}
+
+// 更新最后阅读到指定消息
+func (q *Queries) UpdateMemberLastReadToMessage(ctx context.Context, arg UpdateMemberLastReadToMessageParams) error {
+	_, err := q.exec(ctx, q.updateMemberLastReadToMessageStmt, updateMemberLastReadToMessage, arg.Column1, arg.Column2, arg.Column3)
+	return err
+}
+
+const verifyChatroomPassword = `-- name: VerifyChatroomPassword :one
+SELECT EXISTS(
+    SELECT 1 FROM chatrooms 
+    WHERE room_id = $1 AND access_password = $2 AND room_status = 'active'
+) AS is_valid
+`
+
+type VerifyChatroomPasswordParams struct {
+	RoomID         string         `json:"room_id"`
+	AccessPassword sql.NullString `json:"access_password"`
+}
+
+// 验证聊天室密码
+func (q *Queries) VerifyChatroomPassword(ctx context.Context, arg VerifyChatroomPasswordParams) (bool, error) {
+	row := q.queryRow(ctx, q.verifyChatroomPasswordStmt, verifyChatroomPassword, arg.RoomID, arg.AccessPassword)
+	var is_valid bool
+	err := row.Scan(&is_valid)
+	return is_valid, err
 }

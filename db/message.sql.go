@@ -8,9 +8,32 @@ package sqlcdb
 import (
 	"context"
 	"database/sql"
+	"time"
+
+	"github.com/lib/pq"
 )
 
+const countMessagesInRoom = `-- name: CountMessagesInRoom :one
+
+SELECT COUNT(*) 
+FROM messages 
+WHERE room_id = $1
+`
+
+// =============================================
+// 3. 消息统计与未读 (Message Statistics)
+// =============================================
+// 统计聊天室消息数量
+func (q *Queries) CountMessagesInRoom(ctx context.Context, roomID string) (int64, error) {
+	row := q.queryRow(ctx, q.countMessagesInRoomStmt, countMessagesInRoom, roomID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createMessage = `-- name: CreateMessage :one
+
+
 INSERT INTO messages (
     content,
     message_type,
@@ -37,6 +60,14 @@ type CreateMessageParams struct {
 	RoomID          string         `json:"room_id"`
 }
 
+// =============================================
+// 消息相关SQL查询 (Message Queries)
+// 对应API: 消息相关接口
+// =============================================
+// =============================================
+// 1. 消息基础操作 (Message CRUD)
+// =============================================
+// 发送消息 POST /chatrooms/:roomId/messages
 func (q *Queries) CreateMessage(ctx context.Context, arg CreateMessageParams) (Message, error) {
 	row := q.queryRow(ctx, q.createMessageStmt, createMessage,
 		arg.Content,
@@ -63,9 +94,207 @@ DELETE FROM messages
 WHERE message_id = $1
 `
 
+// 删除消息 DELETE /chatrooms/:roomId/messages/:messageId
 func (q *Queries) DeleteMessage(ctx context.Context, messageID string) error {
 	_, err := q.exec(ctx, q.deleteMessageStmt, deleteMessage, messageID)
 	return err
+}
+
+const deleteMessageSoft = `-- name: DeleteMessageSoft :one
+UPDATE messages 
+SET 
+    content = '该消息已被删除',
+    message_type = 'system_notification'
+WHERE message_id = $1
+RETURNING 
+    message_id,
+    sent_at,
+    content,
+    message_type,
+    quoted_message_id,
+    sender_id,
+    room_id
+`
+
+// 软删除消息（将内容置为系统消息提示）
+func (q *Queries) DeleteMessageSoft(ctx context.Context, messageID string) (Message, error) {
+	row := q.queryRow(ctx, q.deleteMessageSoftStmt, deleteMessageSoft, messageID)
+	var i Message
+	err := row.Scan(
+		&i.MessageID,
+		&i.SentAt,
+		&i.Content,
+		&i.MessageType,
+		&i.QuotedMessageID,
+		&i.SenderID,
+		&i.RoomID,
+	)
+	return i, err
+}
+
+const deleteMessagesByRoom = `-- name: DeleteMessagesByRoom :exec
+
+DELETE FROM messages 
+WHERE room_id = $1
+`
+
+// =============================================
+// 7. 批量操作 (Batch Operations)
+// =============================================
+// 删除聊天室所有消息
+func (q *Queries) DeleteMessagesByRoom(ctx context.Context, roomID string) error {
+	_, err := q.exec(ctx, q.deleteMessagesByRoomStmt, deleteMessagesByRoom, roomID)
+	return err
+}
+
+const deleteMessagesByUser = `-- name: DeleteMessagesByUser :exec
+DELETE FROM messages 
+WHERE sender_id = $1
+`
+
+// 删除用户所有消息
+func (q *Queries) DeleteMessagesByUser(ctx context.Context, senderID sql.NullString) error {
+	_, err := q.exec(ctx, q.deleteMessagesByUserStmt, deleteMessagesByUser, senderID)
+	return err
+}
+
+const deleteMessagesByUserInRoom = `-- name: DeleteMessagesByUserInRoom :exec
+DELETE FROM messages 
+WHERE sender_id = $1 AND room_id = $2
+`
+
+type DeleteMessagesByUserInRoomParams struct {
+	SenderID sql.NullString `json:"sender_id"`
+	RoomID   string         `json:"room_id"`
+}
+
+// 删除用户在指定聊天室的所有消息
+func (q *Queries) DeleteMessagesByUserInRoom(ctx context.Context, arg DeleteMessagesByUserInRoomParams) error {
+	_, err := q.exec(ctx, q.deleteMessagesByUserInRoomStmt, deleteMessagesByUserInRoom, arg.SenderID, arg.RoomID)
+	return err
+}
+
+const getLastMessageInRoom = `-- name: GetLastMessageInRoom :one
+SELECT 
+    m.message_id,
+    m.sent_at,
+    m.content,
+    m.message_type,
+    m.quoted_message_id,
+    m.sender_id,
+    m.room_id,
+    u.username,
+    u.nickname,
+    u.avatar_url
+FROM messages m
+LEFT JOIN users u ON m.sender_id = u.user_id
+WHERE m.room_id = $1
+ORDER BY m.sent_at DESC
+LIMIT 1
+`
+
+type GetLastMessageInRoomRow struct {
+	MessageID       string         `json:"message_id"`
+	SentAt          time.Time      `json:"sent_at"`
+	Content         string         `json:"content"`
+	MessageType     MessageType    `json:"message_type"`
+	QuotedMessageID sql.NullString `json:"quoted_message_id"`
+	SenderID        sql.NullString `json:"sender_id"`
+	RoomID          string         `json:"room_id"`
+	Username        sql.NullString `json:"username"`
+	Nickname        sql.NullString `json:"nickname"`
+	AvatarUrl       sql.NullString `json:"avatar_url"`
+}
+
+// 获取聊天室最后一条消息
+func (q *Queries) GetLastMessageInRoom(ctx context.Context, roomID string) (GetLastMessageInRoomRow, error) {
+	row := q.queryRow(ctx, q.getLastMessageInRoomStmt, getLastMessageInRoom, roomID)
+	var i GetLastMessageInRoomRow
+	err := row.Scan(
+		&i.MessageID,
+		&i.SentAt,
+		&i.Content,
+		&i.MessageType,
+		&i.QuotedMessageID,
+		&i.SenderID,
+		&i.RoomID,
+		&i.Username,
+		&i.Nickname,
+		&i.AvatarUrl,
+	)
+	return i, err
+}
+
+const getLatestMessages = `-- name: GetLatestMessages :many
+SELECT 
+    m.message_id,
+    m.sent_at,
+    m.content,
+    m.message_type,
+    m.quoted_message_id,
+    m.sender_id,
+    m.room_id,
+    u.username,
+    u.nickname,
+    u.avatar_url
+FROM messages m
+LEFT JOIN users u ON m.sender_id = u.user_id
+WHERE m.room_id = $1
+ORDER BY m.sent_at DESC
+LIMIT $2
+`
+
+type GetLatestMessagesParams struct {
+	RoomID string `json:"room_id"`
+	Limit  int64  `json:"limit"`
+}
+
+type GetLatestMessagesRow struct {
+	MessageID       string         `json:"message_id"`
+	SentAt          time.Time      `json:"sent_at"`
+	Content         string         `json:"content"`
+	MessageType     MessageType    `json:"message_type"`
+	QuotedMessageID sql.NullString `json:"quoted_message_id"`
+	SenderID        sql.NullString `json:"sender_id"`
+	RoomID          string         `json:"room_id"`
+	Username        sql.NullString `json:"username"`
+	Nickname        sql.NullString `json:"nickname"`
+	AvatarUrl       sql.NullString `json:"avatar_url"`
+}
+
+// 获取最新消息
+func (q *Queries) GetLatestMessages(ctx context.Context, arg GetLatestMessagesParams) ([]GetLatestMessagesRow, error) {
+	rows, err := q.query(ctx, q.getLatestMessagesStmt, getLatestMessages, arg.RoomID, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetLatestMessagesRow{}
+	for rows.Next() {
+		var i GetLatestMessagesRow
+		if err := rows.Scan(
+			&i.MessageID,
+			&i.SentAt,
+			&i.Content,
+			&i.MessageType,
+			&i.QuotedMessageID,
+			&i.SenderID,
+			&i.RoomID,
+			&i.Username,
+			&i.Nickname,
+			&i.AvatarUrl,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const getMessageByID = `-- name: GetMessageByID :one
@@ -81,6 +310,7 @@ FROM messages
 WHERE message_id = $1
 `
 
+// 获取单条消息
 func (q *Queries) GetMessageByID(ctx context.Context, messageID string) (Message, error) {
 	row := q.queryRow(ctx, q.getMessageByIDStmt, getMessageByID, messageID)
 	var i Message
@@ -96,18 +326,314 @@ func (q *Queries) GetMessageByID(ctx context.Context, messageID string) (Message
 	return i, err
 }
 
-const getMessagesByRoom = `-- name: GetMessagesByRoom :many
-SELECT 
-    message_id,
-    sent_at,
-    content,
-    message_type,
-    quoted_message_id,
-    sender_id,
-    room_id
+const getMessageRoom = `-- name: GetMessageRoom :one
+SELECT room_id 
 FROM messages 
-WHERE room_id = $1
-ORDER BY sent_at DESC
+WHERE message_id = $1
+`
+
+// 获取消息所属聊天室ID
+func (q *Queries) GetMessageRoom(ctx context.Context, messageID string) (string, error) {
+	row := q.queryRow(ctx, q.getMessageRoomStmt, getMessageRoom, messageID)
+	var room_id string
+	err := row.Scan(&room_id)
+	return room_id, err
+}
+
+const getMessageSender = `-- name: GetMessageSender :one
+SELECT sender_id 
+FROM messages 
+WHERE message_id = $1
+`
+
+// 获取消息发送者ID
+func (q *Queries) GetMessageSender(ctx context.Context, messageID string) (sql.NullString, error) {
+	row := q.queryRow(ctx, q.getMessageSenderStmt, getMessageSender, messageID)
+	var sender_id sql.NullString
+	err := row.Scan(&sender_id)
+	return sender_id, err
+}
+
+const getMessageWithSender = `-- name: GetMessageWithSender :one
+SELECT 
+    m.message_id,
+    m.sent_at,
+    m.content,
+    m.message_type,
+    m.quoted_message_id,
+    m.sender_id,
+    m.room_id,
+    u.username,
+    u.nickname,
+    u.avatar_url
+FROM messages m
+LEFT JOIN users u ON m.sender_id = u.user_id
+WHERE m.message_id = $1
+`
+
+type GetMessageWithSenderRow struct {
+	MessageID       string         `json:"message_id"`
+	SentAt          time.Time      `json:"sent_at"`
+	Content         string         `json:"content"`
+	MessageType     MessageType    `json:"message_type"`
+	QuotedMessageID sql.NullString `json:"quoted_message_id"`
+	SenderID        sql.NullString `json:"sender_id"`
+	RoomID          string         `json:"room_id"`
+	Username        sql.NullString `json:"username"`
+	Nickname        sql.NullString `json:"nickname"`
+	AvatarUrl       sql.NullString `json:"avatar_url"`
+}
+
+// 获取消息及发送者信息
+func (q *Queries) GetMessageWithSender(ctx context.Context, messageID string) (GetMessageWithSenderRow, error) {
+	row := q.queryRow(ctx, q.getMessageWithSenderStmt, getMessageWithSender, messageID)
+	var i GetMessageWithSenderRow
+	err := row.Scan(
+		&i.MessageID,
+		&i.SentAt,
+		&i.Content,
+		&i.MessageType,
+		&i.QuotedMessageID,
+		&i.SenderID,
+		&i.RoomID,
+		&i.Username,
+		&i.Nickname,
+		&i.AvatarUrl,
+	)
+	return i, err
+}
+
+const getMessagesAfter = `-- name: GetMessagesAfter :many
+SELECT 
+    m.message_id,
+    m.sent_at,
+    m.content,
+    m.message_type,
+    m.quoted_message_id,
+    m.sender_id,
+    m.room_id,
+    u.username,
+    u.nickname,
+    u.avatar_url
+FROM messages m
+LEFT JOIN users u ON m.sender_id = u.user_id
+WHERE m.room_id = $1 
+    AND m.sent_at > (SELECT sent_at FROM messages WHERE message_id = $2)
+ORDER BY m.sent_at ASC
+LIMIT $3
+`
+
+type GetMessagesAfterParams struct {
+	Column1 sql.NullString `json:"column_1"`
+	Column2 sql.NullString `json:"column_2"`
+	Column3 sql.NullInt64  `json:"column_3"`
+}
+
+type GetMessagesAfterRow struct {
+	MessageID       string         `json:"message_id"`
+	SentAt          time.Time      `json:"sent_at"`
+	Content         string         `json:"content"`
+	MessageType     MessageType    `json:"message_type"`
+	QuotedMessageID sql.NullString `json:"quoted_message_id"`
+	SenderID        sql.NullString `json:"sender_id"`
+	RoomID          string         `json:"room_id"`
+	Username        sql.NullString `json:"username"`
+	Nickname        sql.NullString `json:"nickname"`
+	AvatarUrl       sql.NullString `json:"avatar_url"`
+}
+
+// 获取指定消息之后的消息
+func (q *Queries) GetMessagesAfter(ctx context.Context, arg GetMessagesAfterParams) ([]GetMessagesAfterRow, error) {
+	rows, err := q.query(ctx, q.getMessagesAfterStmt, getMessagesAfter, arg.Column1, arg.Column2, arg.Column3)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetMessagesAfterRow{}
+	for rows.Next() {
+		var i GetMessagesAfterRow
+		if err := rows.Scan(
+			&i.MessageID,
+			&i.SentAt,
+			&i.Content,
+			&i.MessageType,
+			&i.QuotedMessageID,
+			&i.SenderID,
+			&i.RoomID,
+			&i.Username,
+			&i.Nickname,
+			&i.AvatarUrl,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getMessagesBefore = `-- name: GetMessagesBefore :many
+SELECT 
+    m.message_id,
+    m.sent_at,
+    m.content,
+    m.message_type,
+    m.quoted_message_id,
+    m.sender_id,
+    m.room_id,
+    u.username,
+    u.nickname,
+    u.avatar_url
+FROM messages m
+LEFT JOIN users u ON m.sender_id = u.user_id
+WHERE m.room_id = $1 
+    AND m.sent_at < (SELECT sent_at FROM messages WHERE message_id = $2)
+ORDER BY m.sent_at DESC
+LIMIT $3
+`
+
+type GetMessagesBeforeParams struct {
+	Column1 sql.NullString `json:"column_1"`
+	Column2 sql.NullString `json:"column_2"`
+	Column3 sql.NullInt64  `json:"column_3"`
+}
+
+type GetMessagesBeforeRow struct {
+	MessageID       string         `json:"message_id"`
+	SentAt          time.Time      `json:"sent_at"`
+	Content         string         `json:"content"`
+	MessageType     MessageType    `json:"message_type"`
+	QuotedMessageID sql.NullString `json:"quoted_message_id"`
+	SenderID        sql.NullString `json:"sender_id"`
+	RoomID          string         `json:"room_id"`
+	Username        sql.NullString `json:"username"`
+	Nickname        sql.NullString `json:"nickname"`
+	AvatarUrl       sql.NullString `json:"avatar_url"`
+}
+
+// 获取指定消息之前的消息 GET /chatrooms/:roomId/messages?before=M100
+func (q *Queries) GetMessagesBefore(ctx context.Context, arg GetMessagesBeforeParams) ([]GetMessagesBeforeRow, error) {
+	rows, err := q.query(ctx, q.getMessagesBeforeStmt, getMessagesBefore, arg.Column1, arg.Column2, arg.Column3)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetMessagesBeforeRow{}
+	for rows.Next() {
+		var i GetMessagesBeforeRow
+		if err := rows.Scan(
+			&i.MessageID,
+			&i.SentAt,
+			&i.Content,
+			&i.MessageType,
+			&i.QuotedMessageID,
+			&i.SenderID,
+			&i.RoomID,
+			&i.Username,
+			&i.Nickname,
+			&i.AvatarUrl,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getMessagesByIDs = `-- name: GetMessagesByIDs :many
+SELECT 
+    m.message_id,
+    m.sent_at,
+    m.content,
+    m.message_type,
+    m.quoted_message_id,
+    m.sender_id,
+    m.room_id,
+    u.username,
+    u.nickname,
+    u.avatar_url
+FROM messages m
+LEFT JOIN users u ON m.sender_id = u.user_id
+WHERE m.message_id = ANY($1::varchar[])
+ORDER BY m.sent_at ASC
+`
+
+type GetMessagesByIDsRow struct {
+	MessageID       string         `json:"message_id"`
+	SentAt          time.Time      `json:"sent_at"`
+	Content         string         `json:"content"`
+	MessageType     MessageType    `json:"message_type"`
+	QuotedMessageID sql.NullString `json:"quoted_message_id"`
+	SenderID        sql.NullString `json:"sender_id"`
+	RoomID          string         `json:"room_id"`
+	Username        sql.NullString `json:"username"`
+	Nickname        sql.NullString `json:"nickname"`
+	AvatarUrl       sql.NullString `json:"avatar_url"`
+}
+
+// 批量获取消息
+func (q *Queries) GetMessagesByIDs(ctx context.Context, dollar_1 []string) ([]GetMessagesByIDsRow, error) {
+	rows, err := q.query(ctx, q.getMessagesByIDsStmt, getMessagesByIDs, pq.Array(dollar_1))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetMessagesByIDsRow{}
+	for rows.Next() {
+		var i GetMessagesByIDsRow
+		if err := rows.Scan(
+			&i.MessageID,
+			&i.SentAt,
+			&i.Content,
+			&i.MessageType,
+			&i.QuotedMessageID,
+			&i.SenderID,
+			&i.RoomID,
+			&i.Username,
+			&i.Nickname,
+			&i.AvatarUrl,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getMessagesByRoom = `-- name: GetMessagesByRoom :many
+
+SELECT 
+    m.message_id,
+    m.sent_at,
+    m.content,
+    m.message_type,
+    m.quoted_message_id,
+    m.sender_id,
+    m.room_id,
+    u.username,
+    u.nickname,
+    u.avatar_url
+FROM messages m
+LEFT JOIN users u ON m.sender_id = u.user_id
+WHERE m.room_id = $1
+ORDER BY m.sent_at DESC
 LIMIT $2 OFFSET $3
 `
 
@@ -117,8 +643,228 @@ type GetMessagesByRoomParams struct {
 	Offset int64  `json:"offset"`
 }
 
-func (q *Queries) GetMessagesByRoom(ctx context.Context, arg GetMessagesByRoomParams) ([]Message, error) {
+type GetMessagesByRoomRow struct {
+	MessageID       string         `json:"message_id"`
+	SentAt          time.Time      `json:"sent_at"`
+	Content         string         `json:"content"`
+	MessageType     MessageType    `json:"message_type"`
+	QuotedMessageID sql.NullString `json:"quoted_message_id"`
+	SenderID        sql.NullString `json:"sender_id"`
+	RoomID          string         `json:"room_id"`
+	Username        sql.NullString `json:"username"`
+	Nickname        sql.NullString `json:"nickname"`
+	AvatarUrl       sql.NullString `json:"avatar_url"`
+}
+
+// =============================================
+// 2. 消息列表查询 (Message List Queries)
+// =============================================
+// 获取聊天室消息历史 GET /chatrooms/:roomId/messages
+func (q *Queries) GetMessagesByRoom(ctx context.Context, arg GetMessagesByRoomParams) ([]GetMessagesByRoomRow, error) {
 	rows, err := q.query(ctx, q.getMessagesByRoomStmt, getMessagesByRoom, arg.RoomID, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetMessagesByRoomRow{}
+	for rows.Next() {
+		var i GetMessagesByRoomRow
+		if err := rows.Scan(
+			&i.MessageID,
+			&i.SentAt,
+			&i.Content,
+			&i.MessageType,
+			&i.QuotedMessageID,
+			&i.SenderID,
+			&i.RoomID,
+			&i.Username,
+			&i.Nickname,
+			&i.AvatarUrl,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getMessagesByRoomAsc = `-- name: GetMessagesByRoomAsc :many
+SELECT 
+    m.message_id,
+    m.sent_at,
+    m.content,
+    m.message_type,
+    m.quoted_message_id,
+    m.sender_id,
+    m.room_id,
+    u.username,
+    u.nickname,
+    u.avatar_url
+FROM messages m
+LEFT JOIN users u ON m.sender_id = u.user_id
+WHERE m.room_id = $1
+ORDER BY m.sent_at ASC
+LIMIT $2 OFFSET $3
+`
+
+type GetMessagesByRoomAscParams struct {
+	RoomID string `json:"room_id"`
+	Limit  int64  `json:"limit"`
+	Offset int64  `json:"offset"`
+}
+
+type GetMessagesByRoomAscRow struct {
+	MessageID       string         `json:"message_id"`
+	SentAt          time.Time      `json:"sent_at"`
+	Content         string         `json:"content"`
+	MessageType     MessageType    `json:"message_type"`
+	QuotedMessageID sql.NullString `json:"quoted_message_id"`
+	SenderID        sql.NullString `json:"sender_id"`
+	RoomID          string         `json:"room_id"`
+	Username        sql.NullString `json:"username"`
+	Nickname        sql.NullString `json:"nickname"`
+	AvatarUrl       sql.NullString `json:"avatar_url"`
+}
+
+// 获取聊天室消息历史（时间正序）
+func (q *Queries) GetMessagesByRoomAsc(ctx context.Context, arg GetMessagesByRoomAscParams) ([]GetMessagesByRoomAscRow, error) {
+	rows, err := q.query(ctx, q.getMessagesByRoomAscStmt, getMessagesByRoomAsc, arg.RoomID, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetMessagesByRoomAscRow{}
+	for rows.Next() {
+		var i GetMessagesByRoomAscRow
+		if err := rows.Scan(
+			&i.MessageID,
+			&i.SentAt,
+			&i.Content,
+			&i.MessageType,
+			&i.QuotedMessageID,
+			&i.SenderID,
+			&i.RoomID,
+			&i.Username,
+			&i.Nickname,
+			&i.AvatarUrl,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getMessagesByTimeRange = `-- name: GetMessagesByTimeRange :many
+SELECT 
+    m.message_id,
+    m.sent_at,
+    m.content,
+    m.message_type,
+    m.quoted_message_id,
+    m.sender_id,
+    m.room_id,
+    u.username,
+    u.nickname,
+    u.avatar_url
+FROM messages m
+LEFT JOIN users u ON m.sender_id = u.user_id
+WHERE m.room_id = $1 
+    AND m.sent_at >= $2 
+    AND m.sent_at <= $3
+ORDER BY m.sent_at ASC
+`
+
+type GetMessagesByTimeRangeParams struct {
+	RoomID   string    `json:"room_id"`
+	SentAt   time.Time `json:"sent_at"`
+	SentAt_2 time.Time `json:"sent_at_2"`
+}
+
+type GetMessagesByTimeRangeRow struct {
+	MessageID       string         `json:"message_id"`
+	SentAt          time.Time      `json:"sent_at"`
+	Content         string         `json:"content"`
+	MessageType     MessageType    `json:"message_type"`
+	QuotedMessageID sql.NullString `json:"quoted_message_id"`
+	SenderID        sql.NullString `json:"sender_id"`
+	RoomID          string         `json:"room_id"`
+	Username        sql.NullString `json:"username"`
+	Nickname        sql.NullString `json:"nickname"`
+	AvatarUrl       sql.NullString `json:"avatar_url"`
+}
+
+// 获取时间范围内的消息
+func (q *Queries) GetMessagesByTimeRange(ctx context.Context, arg GetMessagesByTimeRangeParams) ([]GetMessagesByTimeRangeRow, error) {
+	rows, err := q.query(ctx, q.getMessagesByTimeRangeStmt, getMessagesByTimeRange, arg.RoomID, arg.SentAt, arg.SentAt_2)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetMessagesByTimeRangeRow{}
+	for rows.Next() {
+		var i GetMessagesByTimeRangeRow
+		if err := rows.Scan(
+			&i.MessageID,
+			&i.SentAt,
+			&i.Content,
+			&i.MessageType,
+			&i.QuotedMessageID,
+			&i.SenderID,
+			&i.RoomID,
+			&i.Username,
+			&i.Nickname,
+			&i.AvatarUrl,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getMessagesByUser = `-- name: GetMessagesByUser :many
+SELECT 
+    m.message_id,
+    m.sent_at,
+    m.content,
+    m.message_type,
+    m.quoted_message_id,
+    m.sender_id,
+    m.room_id
+FROM messages m
+WHERE m.sender_id = $1
+ORDER BY m.sent_at DESC
+LIMIT $2 OFFSET $3
+`
+
+type GetMessagesByUserParams struct {
+	SenderID sql.NullString `json:"sender_id"`
+	Limit    int64          `json:"limit"`
+	Offset   int64          `json:"offset"`
+}
+
+// 获取用户发送的消息
+func (q *Queries) GetMessagesByUser(ctx context.Context, arg GetMessagesByUserParams) ([]Message, error) {
+	rows, err := q.query(ctx, q.getMessagesByUserStmt, getMessagesByUser, arg.SenderID, arg.Limit, arg.Offset)
 	if err != nil {
 		return nil, err
 	}
@@ -148,6 +894,181 @@ func (q *Queries) GetMessagesByRoom(ctx context.Context, arg GetMessagesByRoomPa
 	return items, nil
 }
 
+const getMessagesByUserInRoom = `-- name: GetMessagesByUserInRoom :many
+SELECT 
+    m.message_id,
+    m.sent_at,
+    m.content,
+    m.message_type,
+    m.quoted_message_id,
+    m.sender_id,
+    m.room_id
+FROM messages m
+WHERE m.sender_id = $1 AND m.room_id = $2
+ORDER BY m.sent_at DESC
+LIMIT $3 OFFSET $4
+`
+
+type GetMessagesByUserInRoomParams struct {
+	SenderID sql.NullString `json:"sender_id"`
+	RoomID   string         `json:"room_id"`
+	Limit    int64          `json:"limit"`
+	Offset   int64          `json:"offset"`
+}
+
+// 获取用户在指定聊天室发送的消息
+func (q *Queries) GetMessagesByUserInRoom(ctx context.Context, arg GetMessagesByUserInRoomParams) ([]Message, error) {
+	rows, err := q.query(ctx, q.getMessagesByUserInRoomStmt, getMessagesByUserInRoom,
+		arg.SenderID,
+		arg.RoomID,
+		arg.Limit,
+		arg.Offset,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Message{}
+	for rows.Next() {
+		var i Message
+		if err := rows.Scan(
+			&i.MessageID,
+			&i.SentAt,
+			&i.Content,
+			&i.MessageType,
+			&i.QuotedMessageID,
+			&i.SenderID,
+			&i.RoomID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getMessagesQuotingThis = `-- name: GetMessagesQuotingThis :many
+SELECT 
+    m.message_id,
+    m.sent_at,
+    m.content,
+    m.message_type,
+    m.quoted_message_id,
+    m.sender_id,
+    m.room_id,
+    u.username,
+    u.nickname,
+    u.avatar_url
+FROM messages m
+LEFT JOIN users u ON m.sender_id = u.user_id
+WHERE m.quoted_message_id = $1
+ORDER BY m.sent_at ASC
+`
+
+type GetMessagesQuotingThisRow struct {
+	MessageID       string         `json:"message_id"`
+	SentAt          time.Time      `json:"sent_at"`
+	Content         string         `json:"content"`
+	MessageType     MessageType    `json:"message_type"`
+	QuotedMessageID sql.NullString `json:"quoted_message_id"`
+	SenderID        sql.NullString `json:"sender_id"`
+	RoomID          string         `json:"room_id"`
+	Username        sql.NullString `json:"username"`
+	Nickname        sql.NullString `json:"nickname"`
+	AvatarUrl       sql.NullString `json:"avatar_url"`
+}
+
+// 获取引用了指定消息的消息列表
+func (q *Queries) GetMessagesQuotingThis(ctx context.Context, quotedMessageID sql.NullString) ([]GetMessagesQuotingThisRow, error) {
+	rows, err := q.query(ctx, q.getMessagesQuotingThisStmt, getMessagesQuotingThis, quotedMessageID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetMessagesQuotingThisRow{}
+	for rows.Next() {
+		var i GetMessagesQuotingThisRow
+		if err := rows.Scan(
+			&i.MessageID,
+			&i.SentAt,
+			&i.Content,
+			&i.MessageType,
+			&i.QuotedMessageID,
+			&i.SenderID,
+			&i.RoomID,
+			&i.Username,
+			&i.Nickname,
+			&i.AvatarUrl,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getQuotedMessage = `-- name: GetQuotedMessage :one
+
+SELECT 
+    m.message_id,
+    m.sent_at,
+    m.content,
+    m.message_type,
+    m.sender_id,
+    m.room_id,
+    u.username,
+    u.nickname,
+    u.avatar_url
+FROM messages m
+LEFT JOIN users u ON m.sender_id = u.user_id
+WHERE m.message_id = $1
+`
+
+type GetQuotedMessageRow struct {
+	MessageID   string         `json:"message_id"`
+	SentAt      time.Time      `json:"sent_at"`
+	Content     string         `json:"content"`
+	MessageType MessageType    `json:"message_type"`
+	SenderID    sql.NullString `json:"sender_id"`
+	RoomID      string         `json:"room_id"`
+	Username    sql.NullString `json:"username"`
+	Nickname    sql.NullString `json:"nickname"`
+	AvatarUrl   sql.NullString `json:"avatar_url"`
+}
+
+// =============================================
+// 5. 引用消息 (Quoted Messages)
+// =============================================
+// 获取被引用的消息
+func (q *Queries) GetQuotedMessage(ctx context.Context, messageID string) (GetQuotedMessageRow, error) {
+	row := q.queryRow(ctx, q.getQuotedMessageStmt, getQuotedMessage, messageID)
+	var i GetQuotedMessageRow
+	err := row.Scan(
+		&i.MessageID,
+		&i.SentAt,
+		&i.Content,
+		&i.MessageType,
+		&i.SenderID,
+		&i.RoomID,
+		&i.Username,
+		&i.Nickname,
+		&i.AvatarUrl,
+	)
+	return i, err
+}
+
 const getUnreadMessageCount = `-- name: GetUnreadMessageCount :one
 SELECT COUNT(*) 
 FROM messages m
@@ -161,11 +1082,235 @@ type GetUnreadMessageCountParams struct {
 	RoomID string `json:"room_id"`
 }
 
+// 获取未读消息数量
 func (q *Queries) GetUnreadMessageCount(ctx context.Context, arg GetUnreadMessageCountParams) (int64, error) {
 	row := q.queryRow(ctx, q.getUnreadMessageCountStmt, getUnreadMessageCount, arg.UserID, arg.RoomID)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
+}
+
+const getUnreadMessages = `-- name: GetUnreadMessages :many
+SELECT 
+    m.message_id,
+    m.sent_at,
+    m.content,
+    m.message_type,
+    m.quoted_message_id,
+    m.sender_id,
+    m.room_id,
+    u.username,
+    u.nickname,
+    u.avatar_url
+FROM messages m
+LEFT JOIN users u ON m.sender_id = u.user_id
+LEFT JOIN chatroom_members cm ON m.room_id = cm.room_id AND cm.user_id = $1
+WHERE m.room_id = $2 
+    AND m.sent_at > COALESCE(cm.last_read_at, '1970-01-01'::TIMESTAMPTZ)
+ORDER BY m.sent_at ASC
+LIMIT $3
+`
+
+type GetUnreadMessagesParams struct {
+	UserID string `json:"user_id"`
+	RoomID string `json:"room_id"`
+	Limit  int64  `json:"limit"`
+}
+
+type GetUnreadMessagesRow struct {
+	MessageID       string         `json:"message_id"`
+	SentAt          time.Time      `json:"sent_at"`
+	Content         string         `json:"content"`
+	MessageType     MessageType    `json:"message_type"`
+	QuotedMessageID sql.NullString `json:"quoted_message_id"`
+	SenderID        sql.NullString `json:"sender_id"`
+	RoomID          string         `json:"room_id"`
+	Username        sql.NullString `json:"username"`
+	Nickname        sql.NullString `json:"nickname"`
+	AvatarUrl       sql.NullString `json:"avatar_url"`
+}
+
+// 获取未读消息列表
+func (q *Queries) GetUnreadMessages(ctx context.Context, arg GetUnreadMessagesParams) ([]GetUnreadMessagesRow, error) {
+	rows, err := q.query(ctx, q.getUnreadMessagesStmt, getUnreadMessages, arg.UserID, arg.RoomID, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetUnreadMessagesRow{}
+	for rows.Next() {
+		var i GetUnreadMessagesRow
+		if err := rows.Scan(
+			&i.MessageID,
+			&i.SentAt,
+			&i.Content,
+			&i.MessageType,
+			&i.QuotedMessageID,
+			&i.SenderID,
+			&i.RoomID,
+			&i.Username,
+			&i.Nickname,
+			&i.AvatarUrl,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getUserUnreadCountsInAllRooms = `-- name: GetUserUnreadCountsInAllRooms :many
+SELECT 
+    cm.room_id,
+    COUNT(m.message_id) AS unread_count
+FROM chatroom_members cm
+LEFT JOIN messages m ON m.room_id = cm.room_id 
+    AND m.sent_at > COALESCE(cm.last_read_at, '1970-01-01'::TIMESTAMPTZ)
+WHERE cm.user_id = $1 AND cm.is_active = true
+GROUP BY cm.room_id
+`
+
+type GetUserUnreadCountsInAllRoomsRow struct {
+	RoomID      string `json:"room_id"`
+	UnreadCount int64  `json:"unread_count"`
+}
+
+// 获取用户在所有聊天室的未读消息数
+func (q *Queries) GetUserUnreadCountsInAllRooms(ctx context.Context, userID string) ([]GetUserUnreadCountsInAllRoomsRow, error) {
+	rows, err := q.query(ctx, q.getUserUnreadCountsInAllRoomsStmt, getUserUnreadCountsInAllRooms, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetUserUnreadCountsInAllRoomsRow{}
+	for rows.Next() {
+		var i GetUserUnreadCountsInAllRoomsRow
+		if err := rows.Scan(&i.RoomID, &i.UnreadCount); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const isMessageSender = `-- name: IsMessageSender :one
+
+SELECT EXISTS(
+    SELECT 1 FROM messages 
+    WHERE message_id = $1 AND sender_id = $2
+) AS is_sender
+`
+
+type IsMessageSenderParams struct {
+	MessageID string         `json:"message_id"`
+	SenderID  sql.NullString `json:"sender_id"`
+}
+
+// =============================================
+// 6. 消息权限验证 (Permission Checks)
+// =============================================
+// 检查用户是否是消息发送者
+func (q *Queries) IsMessageSender(ctx context.Context, arg IsMessageSenderParams) (bool, error) {
+	row := q.queryRow(ctx, q.isMessageSenderStmt, isMessageSender, arg.MessageID, arg.SenderID)
+	var is_sender bool
+	err := row.Scan(&is_sender)
+	return is_sender, err
+}
+
+const searchMessagesInRoom = `-- name: SearchMessagesInRoom :many
+
+SELECT 
+    m.message_id,
+    m.sent_at,
+    m.content,
+    m.message_type,
+    m.quoted_message_id,
+    m.sender_id,
+    m.room_id,
+    u.username,
+    u.nickname,
+    u.avatar_url
+FROM messages m
+LEFT JOIN users u ON m.sender_id = u.user_id
+WHERE m.room_id = $1 
+    AND m.content ILIKE '%' || $2 || '%'
+ORDER BY m.sent_at DESC
+LIMIT $3 OFFSET $4
+`
+
+type SearchMessagesInRoomParams struct {
+	RoomID  string         `json:"room_id"`
+	Column2 sql.NullString `json:"column_2"`
+	Limit   int64          `json:"limit"`
+	Offset  int64          `json:"offset"`
+}
+
+type SearchMessagesInRoomRow struct {
+	MessageID       string         `json:"message_id"`
+	SentAt          time.Time      `json:"sent_at"`
+	Content         string         `json:"content"`
+	MessageType     MessageType    `json:"message_type"`
+	QuotedMessageID sql.NullString `json:"quoted_message_id"`
+	SenderID        sql.NullString `json:"sender_id"`
+	RoomID          string         `json:"room_id"`
+	Username        sql.NullString `json:"username"`
+	Nickname        sql.NullString `json:"nickname"`
+	AvatarUrl       sql.NullString `json:"avatar_url"`
+}
+
+// =============================================
+// 4. 消息搜索 (Message Search)
+// =============================================
+// 在聊天室中搜索消息
+func (q *Queries) SearchMessagesInRoom(ctx context.Context, arg SearchMessagesInRoomParams) ([]SearchMessagesInRoomRow, error) {
+	rows, err := q.query(ctx, q.searchMessagesInRoomStmt, searchMessagesInRoom,
+		arg.RoomID,
+		arg.Column2,
+		arg.Limit,
+		arg.Offset,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []SearchMessagesInRoomRow{}
+	for rows.Next() {
+		var i SearchMessagesInRoomRow
+		if err := rows.Scan(
+			&i.MessageID,
+			&i.SentAt,
+			&i.Content,
+			&i.MessageType,
+			&i.QuotedMessageID,
+			&i.SenderID,
+			&i.RoomID,
+			&i.Username,
+			&i.Nickname,
+			&i.AvatarUrl,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const updateMessage = `-- name: UpdateMessage :one
@@ -189,6 +1334,7 @@ type UpdateMessageParams struct {
 	Content   string `json:"content"`
 }
 
+// 编辑消息 PUT /chatrooms/:roomId/messages/:messageId
 func (q *Queries) UpdateMessage(ctx context.Context, arg UpdateMessageParams) (Message, error) {
 	row := q.queryRow(ctx, q.updateMessageStmt, updateMessage, arg.MessageID, arg.Content)
 	var i Message
