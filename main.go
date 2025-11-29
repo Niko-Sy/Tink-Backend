@@ -3,7 +3,6 @@ package main
 import (
 	"chatroombackend/api/authentic"
 	"chatroombackend/api/chatroom"
-	"chatroombackend/models"
 
 	"github.com/gin-gonic/gin"
 )

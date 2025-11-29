@@ -3,7 +3,6 @@ package chatroom
 import (
 	"chatroombackend/models"
 	"chatroombackend/utils"
-	"fmt"
 	"log"
 	"net/http"
 	"time"
@@ -59,6 +58,8 @@ func HandleCreateRoom(c *gin.Context) {
 		JoinedAt: time.Now(),
 		IsActive: true,
 	}
+
+	log.Println("member:", member)
 
 	// TODO: 将成员记录保存到数据库
 

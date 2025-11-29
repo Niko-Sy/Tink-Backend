@@ -1,0 +1,17 @@
+version: "2"
+sql:
+  - engine: "postgresql"
+    queries: "./dbsql/query/"
+    schema: "./dbsql/migration/"
+    database:
+      uri: "postgresql://postgres:123456@localhost:5432/chatroom?sslmode=disable"
+    gen:
+      go:
+        package: "sqlcdb"
+        out: "./db"
+        sql_package: "database/sql"
+        emit_json_tags: true
+        emit_prepared_queries: true
+        emit_interface: true
+        emit_exact_table_names: false
+        emit_empty_slices: true
