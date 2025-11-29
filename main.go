@@ -3,6 +3,7 @@ package main
 import (
 	"chatroombackend/api/authentic"
 	"chatroombackend/api/chatroom"
+	"chatroombackend/api/user"
 	"chatroombackend/middleware"
 	"log"
 	"os"
@@ -55,8 +56,8 @@ func main() {
 			authGroup.GET("/logout", authentic.HandleLogout)
 			authGroup.GET("/refresh", authentic.HandleRefresh)
 			authGroup.POST("/changepwd", authentic.HandleChangePassword)
-			authGroup.GET("/userinfo", authentic.HandleGetUserInfo)
-			authGroup.POST("/updateuserinfo", authentic.HandleUpdateUserInfo)
+			// authGroup.GET("/userinfo", authentic.HandleGetUserInfo)
+			// authGroup.POST("/updateuserinfo", authentic.HandleUpdateUserInfo)
 		}
 		chatroomGroup := apiV1.Group("/chatroom")
 		{
@@ -67,10 +68,22 @@ func main() {
 			chatroomAuth := chatroomGroup.Group("")
 			chatroomAuth.Use(middleware.JWTAuthMiddleware())
 			{
-				// chatroomAuth.GET("/getroomlist", chatroom.HandleGetRoomList)
 				chatroomAuth.POST("/createroom", chatroom.HandleCreateRoom)
-				// chatroomAuth.POST("/joinroom", chatroom.HandleJoinRoom)
-				// chatroomAuth.POST("/leaveroom", chatroom.HandleLeaveRoom)
+				chatroomAuth.POST("/joinroom", chatroom.HandleJoinRoom)
+				chatroomAuth.POST("/leaveroom", chatroom.HandleLeaveRoom)
+				chatroomAuth.POST("/:roomid/update", chatroom.HandleUpdateRoom)
+				chatroomAuth.POST("/:roomid/delete", chatroom.HandleDeleteRoom)
+			}
+		}
+		usersGroup := apiV1.Group("/users")
+		{
+			userAuth := usersGroup.Group("")
+			userAuth.Use(middleware.JWTAuthMiddleware())
+			{
+				// userAuth.GET("/me/userinfo", user.HandleGetUserInfo)
+				// userAuth.POST("/me/updateuserinfo", user.HandleUpdateUserInfo)
+				// userAuth.POST("/me/updatestatus", user.HandleUpdateUserStatus)
+				userAuth.GET("/me/chatrooms", user.HandleGetUserChatrooms)
 			}
 		}
 

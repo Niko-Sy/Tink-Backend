@@ -1,4 +1,4 @@
-package authentic
+package user
 
 import (
 	"chatroombackend/models"

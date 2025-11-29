@@ -176,7 +176,7 @@ Content-Type: application/json
 
 ### 3.1 获取当前用户信息
 
-**接口**: `GET /users/me`
+**接口**: `GET /users/me/info`
 
 **响应**:
 
@@ -221,7 +221,7 @@ Content-Type: application/json
 
 ### 3.3 根据ID获取用户信息
 
-**接口**: `GET /users/:userId`
+**接口**: `GET /users/:userId/info`
 
 **响应**: 同3.1，但不包含敏感信息（email, phone等）
 
@@ -259,7 +259,7 @@ Content-Type: application/json
 
 ### 3.5 更新在线状态
 
-**接口**: `POST /users/me/status/update`
+**接口**: `POST /users/me/updatestatus`
 
 **请求体**:
 
@@ -275,7 +275,7 @@ Content-Type: application/json
 
 ### 4.1 创建聊天室
 
-**接口**: `POST /chatrooms`
+**接口**: `POST /chatrooms/createroom`
 
 **请求体**:
 
@@ -312,12 +312,13 @@ Content-Type: application/json
 
 ### 4.2 加入聊天室
 
-**接口**: `POST /chatrooms/:roomId/join`
+**接口**: `POST /chatrooms/joinroom`
 
 **请求体**:
 
 ```typescript
 {
+  "roomId":"100000001",
   "password": "123456"  // 仅protected类型需要
 }
 ```
@@ -343,9 +344,32 @@ Content-Type: application/json
 }
 ```
 
+
+
+ **功能** :
+
+1. ✅ 从 JWT Token 获取当前用户 ID
+2. ✅ 验证聊天室是否存在
+3. ✅ 检查用户是否已经是成员（避免重复加入）
+4. ✅ 根据聊天室类型处理：
+   * **public** : 直接加入
+   * **private_password** : 验证密码后加入
+   * **private_invite_only** : 拒绝加入（需要邀请）
+5. ✅ 创建成员记录（角色为 member）
+6. ✅ 增加聊天室成员计数
+
 ### 4.3 退出聊天室
 
-**接口**: `POST /chatrooms/:roomId/leave`
+**接口**: `POST /chatrooms/leaveroom`
+
+
+**请求体**:
+
+```typescript
+{
+  "roomId":"100000001"
+}
+```
 
 **响应**:
 
@@ -355,6 +379,17 @@ Content-Type: application/json
   "message": "退出成功"
 }
 ```
+
+
+
+ **功能** :
+
+1. ✅ 验证用户登录状态
+2. ✅ 检查聊天室是否存在
+3. ✅ 检查用户是否是聊天室成员
+4. ✅  **房主保护** : 房主不能直接退出，需先转让权限或解散聊天室
+5. ✅ 执行退出操作（软删除：设置 `is_active=false`, `left_at=NOW()`）
+6. ✅ 减少聊天室成员计数
 
 ### 4.4 获取用户的聊天室列表
 
@@ -442,11 +477,24 @@ Content-Type: application/json
 }
 ```
 
+✅ 验证用户登录状态
+
+1. ✅ 检查聊天室是否存在
+3. ✅  **权限检查** : 只有房主或管理员可以修改
+4. ✅ 类型转换: `public`→`public`, `private`→`private_invite_only`, `protected`→`private_password`
+5. ✅ 部分更新: 只更新提供的字段（使用指针类型判断）
+6. ✅ 返回更新后的聊天室信息
+
 ### 4.7 删除聊天室
 
 **接口**: `POST /chatrooms/:roomId/delete`
 
 **权限**: 仅创建者可删除
+
+1. ✅ 验证用户登录状态
+2. ✅ 检查聊天室是否存在
+3. ✅  **权限检查** : 只有房主（owner）可以删除
+4. ✅ 执行软删除（设置 `room_status = 'deleted'`）
 
 ---
 
