@@ -7,6 +7,7 @@ import (
 	"chatroombackend/api/user"
 	"chatroombackend/api/websocketmsg"
 	"chatroombackend/middleware"
+	"chatroombackend/utils"
 	"log"
 	"os"
 	"os/signal"
@@ -49,6 +50,9 @@ func main() {
 	// 注入 sql queries 到 websocket 包以支持消息入库与房间管理
 	websocketmsg.SetQueries(dbManager.GetQueries())
 
+	// 图片静态文件服务
+	utils.ServeStaticImages(router, "/static/images", "./uploads")
+
 	// 数据库健康检查端点
 	router.GET("/health/db", middleware.DBStatusHandler(dbManager))
 
@@ -57,6 +61,7 @@ func main() {
 
 	apiV1 := router.Group("/api/v1")
 	{
+
 		authGroup := apiV1.Group("/auth")
 		{
 			authGroup.POST("/login", authentic.HandleLogin)
@@ -81,6 +86,8 @@ func main() {
 				chatroomAuth.POST("/leaveroom", chatroom.HandleLeaveRoom)
 				chatroomAuth.POST("/:roomid/update", chatroom.HandleUpdateRoom)
 				chatroomAuth.POST("/:roomid/delete", chatroom.HandleDeleteRoom)
+				// 聊天室图片上传
+				chatroomAuth.POST("/:roomid/uploadimage", utils.HandleUploadChatImage)
 				membersgroup := chatroomAuth.Group("/:roomid/members")
 				{
 					membersgroup.GET("/memberlist", member.HandleListRoomMembers)
@@ -105,6 +112,8 @@ func main() {
 				userAuth.POST("/me/update", user.HandleUpdateUserInfo)
 				userAuth.POST("/me/updatestatus", user.HandleUpdateUserStatus)
 				userAuth.GET("/me/chatrooms", user.HandleGetUserChatrooms)
+				// 用户头像上传
+				userAuth.POST("/me/uploadavatar", utils.HandleUploadAvatar)
 			}
 		}
 
