@@ -66,6 +66,31 @@ func (q *Queries) CountOnlineChatroomMembers(ctx context.Context, roomID string)
 	return count, err
 }
 
+const countSearchChatroomMembers = `-- name: CountSearchChatroomMembers :one
+SELECT COUNT(*) 
+FROM chatroom_members cm
+JOIN users u ON cm.user_id = u.user_id
+WHERE cm.room_id = $1 
+    AND cm.is_active = true
+    AND (
+        u.username ILIKE '%' || $2 || '%' 
+        OR u.nickname ILIKE '%' || $2 || '%'
+    )
+`
+
+type CountSearchChatroomMembersParams struct {
+	RoomID  string         `json:"room_id"`
+	Column2 sql.NullString `json:"column_2"`
+}
+
+// 统计搜索结果数量
+func (q *Queries) CountSearchChatroomMembers(ctx context.Context, arg CountSearchChatroomMembersParams) (int64, error) {
+	row := q.queryRow(ctx, q.countSearchChatroomMembersStmt, countSearchChatroomMembers, arg.RoomID, arg.Column2)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countUserChatrooms = `-- name: CountUserChatrooms :one
 SELECT COUNT(*) 
 FROM chatrooms cr
@@ -1181,6 +1206,80 @@ type RemoveMemberAdminParams struct {
 func (q *Queries) RemoveMemberAdmin(ctx context.Context, arg RemoveMemberAdminParams) error {
 	_, err := q.exec(ctx, q.removeMemberAdminStmt, removeMemberAdmin, arg.UserID, arg.RoomID)
 	return err
+}
+
+const searchChatroomMembers = `-- name: SearchChatroomMembers :many
+SELECT 
+    u.user_id,
+    u.username,
+    u.nickname,
+    u.avatar_url,
+    u.online_status
+FROM chatroom_members cm
+JOIN users u ON cm.user_id = u.user_id
+WHERE cm.room_id = $1 
+    AND cm.is_active = true
+    AND (
+        u.username ILIKE '%' || $2 || '%' 
+        OR u.nickname ILIKE '%' || $2 || '%'
+    )
+ORDER BY 
+    CASE WHEN u.username ILIKE $2 || '%' THEN 0  -- 前缀匹配优先
+         WHEN u.nickname ILIKE $2 || '%' THEN 1
+         ELSE 2 
+    END,
+    u.username ASC
+LIMIT $3 OFFSET $4
+`
+
+type SearchChatroomMembersParams struct {
+	RoomID  string         `json:"room_id"`
+	Column2 sql.NullString `json:"column_2"`
+	Limit   int64          `json:"limit"`
+	Offset  int64          `json:"offset"`
+}
+
+type SearchChatroomMembersRow struct {
+	UserID       string               `json:"user_id"`
+	Username     string               `json:"username"`
+	Nickname     sql.NullString       `json:"nickname"`
+	AvatarUrl    sql.NullString       `json:"avatar_url"`
+	OnlineStatus NullUserOnlineStatus `json:"online_status"`
+}
+
+// 在聊天室内搜索成员（模糊查询用户名或昵称）
+func (q *Queries) SearchChatroomMembers(ctx context.Context, arg SearchChatroomMembersParams) ([]SearchChatroomMembersRow, error) {
+	rows, err := q.query(ctx, q.searchChatroomMembersStmt, searchChatroomMembers,
+		arg.RoomID,
+		arg.Column2,
+		arg.Limit,
+		arg.Offset,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []SearchChatroomMembersRow{}
+	for rows.Next() {
+		var i SearchChatroomMembersRow
+		if err := rows.Scan(
+			&i.UserID,
+			&i.Username,
+			&i.Nickname,
+			&i.AvatarUrl,
+			&i.OnlineStatus,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const searchChatrooms = `-- name: SearchChatrooms :many

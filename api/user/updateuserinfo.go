@@ -1,85 +1,154 @@
 package user
 
 import (
-	"chatroombackend/models"
+	sqlcdb "chatroombackend/db"
+	"chatroombackend/middleware"
+	"database/sql"
+	"errors"
 	"net/http"
 	"time"
 
 	"github.com/gin-gonic/gin"
 )
 
-func HandleUpdateUserInfo(context *gin.Context) {
-	var updateUserInfoReq struct {
-		UserId    string `json:"userId" binding:"required"` // 用户ID（U+9位数字）
-		Username  string `json:"username"`                  // 用户名
-		Nickname  string `json:"nickname,omitempty"`        // 昵称
-		Avatar    string `json:"avatar"`                    // 头像URL
-		Email     string `json:"email,omitempty"`           // 邮箱
-		Phone     string `json:"phone,omitempty"`           // 手机号
-		Signature string `json:"signature,omitempty"`       // 个性签名
-	}
-	if err := context.ShouldBindJSON(&updateUserInfoReq); err != nil {
-		context.JSON(http.StatusBadRequest, gin.H{"error": "无效的请求数据"})
-		return
-	}
+type UpdateUserInfoRequest struct {
+	Nickname  *string `json:"nickname"`
+	Avatar    *string `json:"avatar"`
+	Signature *string `json:"signature"`
+	Phone     *string `json:"phone"`
+	Email     *string `json:"email"`
+}
 
-	// 模拟数据库获取原始用户信息
-	user := models.User{
-		UserId:        "U123456789",
-		Username:      "admin",
-		Nickname:      "管理员",
-		Avatar:        "https://example.com/avatar.jpg",
-		Email:         "admin@example.com",
-		Password:      "old-password",
-		OnlineStatus:  "online",
-		AccountStatus: "active",
-		SystemRole:    "super_admin",
-		RegisterTime:  time.Now().AddDate(0, 0, -30), // 30天前注册
-		LastLoginTime: time.Now(),
-	}
+type UpdateUserInfoResponse struct {
+	UserId        string     `json:"userId"`
+	Username      string     `json:"username"`
+	Nickname      string     `json:"nickname"`
+	Avatar        string     `json:"avatar"`
+	Email         string     `json:"email"`
+	Phone         string     `json:"phone"`
+	Signature     string     `json:"signature"`
+	OnlineStatus  string     `json:"onlineStatus"`
+	AccountStatus string     `json:"accountStatus"`
+	SystemRole    string     `json:"systemRole"`
+	RegisterTime  time.Time  `json:"registerTime"`
+	LastLoginTime *time.Time `json:"lastLoginTime"`
+}
 
-	// 检查是否存在改动
-	hasChanges := false
-	originalUser := user // 保存原始值用于比较
-
-	if updateUserInfoReq.Username != "" && updateUserInfoReq.Username != originalUser.Username {
-		user.Username = updateUserInfoReq.Username
-		hasChanges = true
-	}
-	if updateUserInfoReq.Nickname != "" && updateUserInfoReq.Nickname != originalUser.Nickname {
-		user.Nickname = updateUserInfoReq.Nickname
-		hasChanges = true
-	}
-	if updateUserInfoReq.Avatar != "" && updateUserInfoReq.Avatar != originalUser.Avatar {
-		user.Avatar = updateUserInfoReq.Avatar
-		hasChanges = true
-	}
-	if updateUserInfoReq.Email != "" && updateUserInfoReq.Email != originalUser.Email {
-		user.Email = updateUserInfoReq.Email
-		hasChanges = true
-	}
-	if updateUserInfoReq.Phone != "" && updateUserInfoReq.Phone != originalUser.Phone {
-		user.Phone = updateUserInfoReq.Phone
-		hasChanges = true
-	}
-	if updateUserInfoReq.Signature != "" && updateUserInfoReq.Signature != originalUser.Signature {
-		user.Signature = updateUserInfoReq.Signature
-		hasChanges = true
-	}
-
-	// 如果没有改动，则返回相应提示
-	if !hasChanges {
-		context.JSON(http.StatusOK, gin.H{
-			"message": "无改动需要更新",
-			"user":    user,
+func HandleUpdateUserInfo(c *gin.Context) {
+	// 从 JWT 中间件获取用户ID
+	currentUserID := c.GetString("userId")
+	if currentUserID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"code":    401,
+			"message": "未登录，请先登录获取Token",
 		})
 		return
 	}
 
-	// 如果有改动，执行更新逻辑（此处为模拟）
-	context.JSON(http.StatusOK, gin.H{
-		"message": "用户信息更新成功",
-		"user":    user,
-	})
+	var req UpdateUserInfoRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "请求参数错误",
+			"error":   err.Error(),
+		})
+		return
+	}
 
+	// 检查是否有要更新的字段
+	if req.Nickname == nil && req.Avatar == nil && req.Signature == nil && req.Phone == nil && req.Email == nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "没有要更新的字段",
+		})
+		return
+	}
+
+	// 获取数据库查询对象
+	queries, err := middleware.GetQueriesFromContext(c)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    500,
+			"message": "获取数据库连接失败",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	// 检查用户是否存在
+	_, err = queries.GetUserByID(c.Request.Context(), currentUserID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			c.JSON(http.StatusNotFound, gin.H{
+				"code":    404,
+				"message": "用户不存在",
+			})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    500,
+			"message": "查询用户信息失败",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	// 构建更新参数
+	updateParams := sqlcdb.UpdateUserParams{
+		UserID: currentUserID,
+	}
+
+	if req.Nickname != nil {
+		updateParams.Nickname = sql.NullString{String: *req.Nickname, Valid: true}
+	}
+	if req.Avatar != nil {
+		updateParams.AvatarUrl = sql.NullString{String: *req.Avatar, Valid: true}
+	}
+	if req.Signature != nil {
+		updateParams.Bio = sql.NullString{String: *req.Signature, Valid: true}
+	}
+	if req.Phone != nil {
+		updateParams.PhoneNumber = sql.NullString{String: *req.Phone, Valid: true}
+	}
+	if req.Email != nil {
+		updateParams.Email = sql.NullString{String: *req.Email, Valid: true}
+	}
+
+	// 执行更新
+	updatedUser, err := queries.UpdateUser(c.Request.Context(), updateParams)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    500,
+			"message": "更新用户信息失败",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	// 构建响应
+	response := UpdateUserInfoResponse{
+		UserId:        updatedUser.UserID,
+		Username:      updatedUser.Username,
+		Nickname:      updatedUser.Nickname.String,
+		Avatar:        updatedUser.AvatarUrl.String,
+		Email:         updatedUser.Email.String,
+		Phone:         updatedUser.PhoneNumber.String,
+		Signature:     updatedUser.Bio.String,
+		OnlineStatus:  string(updatedUser.OnlineStatus.UserOnlineStatus),
+		AccountStatus: string(updatedUser.AccountStatus.UserAccountStatus),
+		SystemRole:    string(updatedUser.SystemRole.UserSystemRole),
+		RegisterTime:  updatedUser.RegisteredAt,
+		LastLoginTime: func() *time.Time {
+			if updatedUser.LastLoginAt.Valid {
+				return &updatedUser.LastLoginAt.Time
+			}
+			return nil
+		}(),
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    200,
+		"message": "更新成功",
+		"data":    response,
+	})
 }

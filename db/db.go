@@ -69,6 +69,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.countOnlineUsersStmt, err = db.PrepareContext(ctx, countOnlineUsers); err != nil {
 		return nil, fmt.Errorf("error preparing query CountOnlineUsers: %w", err)
 	}
+	if q.countSearchChatroomMembersStmt, err = db.PrepareContext(ctx, countSearchChatroomMembers); err != nil {
+		return nil, fmt.Errorf("error preparing query CountSearchChatroomMembers: %w", err)
+	}
 	if q.countSearchUsersStmt, err = db.PrepareContext(ctx, countSearchUsers); err != nil {
 		return nil, fmt.Errorf("error preparing query CountSearchUsers: %w", err)
 	}
@@ -390,6 +393,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.removeMemberAdminStmt, err = db.PrepareContext(ctx, removeMemberAdmin); err != nil {
 		return nil, fmt.Errorf("error preparing query RemoveMemberAdmin: %w", err)
 	}
+	if q.searchChatroomMembersStmt, err = db.PrepareContext(ctx, searchChatroomMembers); err != nil {
+		return nil, fmt.Errorf("error preparing query SearchChatroomMembers: %w", err)
+	}
 	if q.searchChatroomsStmt, err = db.PrepareContext(ctx, searchChatrooms); err != nil {
 		return nil, fmt.Errorf("error preparing query SearchChatrooms: %w", err)
 	}
@@ -543,6 +549,11 @@ func (q *Queries) Close() error {
 	if q.countOnlineUsersStmt != nil {
 		if cerr := q.countOnlineUsersStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing countOnlineUsersStmt: %w", cerr)
+		}
+	}
+	if q.countSearchChatroomMembersStmt != nil {
+		if cerr := q.countSearchChatroomMembersStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing countSearchChatroomMembersStmt: %w", cerr)
 		}
 	}
 	if q.countSearchUsersStmt != nil {
@@ -1080,6 +1091,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing removeMemberAdminStmt: %w", cerr)
 		}
 	}
+	if q.searchChatroomMembersStmt != nil {
+		if cerr := q.searchChatroomMembersStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing searchChatroomMembersStmt: %w", cerr)
+		}
+	}
 	if q.searchChatroomsStmt != nil {
 		if cerr := q.searchChatroomsStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing searchChatroomsStmt: %w", cerr)
@@ -1259,6 +1275,7 @@ type Queries struct {
 	countMessagesInRoomStmt            *sql.Stmt
 	countOnlineChatroomMembersStmt     *sql.Stmt
 	countOnlineUsersStmt               *sql.Stmt
+	countSearchChatroomMembersStmt     *sql.Stmt
 	countSearchUsersStmt               *sql.Stmt
 	countUserChatroomsStmt             *sql.Stmt
 	createAdminLogStmt                 *sql.Stmt
@@ -1366,6 +1383,7 @@ type Queries struct {
 	listUserChatroomsStmt              *sql.Stmt
 	muteMemberStmt                     *sql.Stmt
 	removeMemberAdminStmt              *sql.Stmt
+	searchChatroomMembersStmt          *sql.Stmt
 	searchChatroomsStmt                *sql.Stmt
 	searchMessagesInRoomStmt           *sql.Stmt
 	searchUsersStmt                    *sql.Stmt
@@ -1412,6 +1430,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		countMessagesInRoomStmt:            q.countMessagesInRoomStmt,
 		countOnlineChatroomMembersStmt:     q.countOnlineChatroomMembersStmt,
 		countOnlineUsersStmt:               q.countOnlineUsersStmt,
+		countSearchChatroomMembersStmt:     q.countSearchChatroomMembersStmt,
 		countSearchUsersStmt:               q.countSearchUsersStmt,
 		countUserChatroomsStmt:             q.countUserChatroomsStmt,
 		createAdminLogStmt:                 q.createAdminLogStmt,
@@ -1519,6 +1538,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		listUserChatroomsStmt:              q.listUserChatroomsStmt,
 		muteMemberStmt:                     q.muteMemberStmt,
 		removeMemberAdminStmt:              q.removeMemberAdminStmt,
+		searchChatroomMembersStmt:          q.searchChatroomMembersStmt,
 		searchChatroomsStmt:                q.searchChatroomsStmt,
 		searchMessagesInRoomStmt:           q.searchMessagesInRoomStmt,
 		searchUsersStmt:                    q.searchUsersStmt,

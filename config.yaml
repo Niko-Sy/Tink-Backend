@@ -1,0 +1,4 @@
+databaseurl: "postgres://postgres:123456@localhost:5432/chatroom?sslmode=disable"
+server:
+  port: 8080
+  host: "localhost"

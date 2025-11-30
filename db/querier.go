@@ -50,6 +50,8 @@ type Querier interface {
 	CountOnlineChatroomMembers(ctx context.Context, roomID string) (int64, error)
 	// 统计在线用户数
 	CountOnlineUsers(ctx context.Context) (int64, error)
+	// 统计搜索结果数量
+	CountSearchChatroomMembers(ctx context.Context, arg CountSearchChatroomMembersParams) (int64, error)
 	// 搜索用户计数
 	CountSearchUsers(ctx context.Context, dollar_1 sql.NullString) (int64, error)
 	// 统计用户加入的聊天室数量
@@ -335,6 +337,8 @@ type Querier interface {
 	MuteMember(ctx context.Context, arg MuteMemberParams) error
 	// 取消管理员 POST /chatrooms/:roomId/members/:userId/remove-admin
 	RemoveMemberAdmin(ctx context.Context, arg RemoveMemberAdminParams) error
+	// 在聊天室内搜索成员（模糊查询用户名或昵称）
+	SearchChatroomMembers(ctx context.Context, arg SearchChatroomMembersParams) ([]SearchChatroomMembersRow, error)
 	// 搜索聊天室
 	SearchChatrooms(ctx context.Context, arg SearchChatroomsParams) ([]SearchChatroomsRow, error)
 	// =============================================

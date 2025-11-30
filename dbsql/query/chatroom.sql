@@ -361,6 +361,42 @@ FROM chatroom_members cm
 JOIN users u ON cm.user_id = u.user_id
 WHERE cm.room_id = $1 AND cm.is_active = true AND u.online_status IN ('online', 'away', 'do_not_disturb');
 
+-- name: SearchChatroomMembers :many
+-- 在聊天室内搜索成员（模糊查询用户名或昵称）
+SELECT 
+    u.user_id,
+    u.username,
+    u.nickname,
+    u.avatar_url,
+    u.online_status
+FROM chatroom_members cm
+JOIN users u ON cm.user_id = u.user_id
+WHERE cm.room_id = $1 
+    AND cm.is_active = true
+    AND (
+        u.username ILIKE '%' || $2 || '%' 
+        OR u.nickname ILIKE '%' || $2 || '%'
+    )
+ORDER BY 
+    CASE WHEN u.username ILIKE $2 || '%' THEN 0  -- 前缀匹配优先
+         WHEN u.nickname ILIKE $2 || '%' THEN 1
+         ELSE 2 
+    END,
+    u.username ASC
+LIMIT $3 OFFSET $4;
+
+-- name: CountSearchChatroomMembers :one
+-- 统计搜索结果数量
+SELECT COUNT(*) 
+FROM chatroom_members cm
+JOIN users u ON cm.user_id = u.user_id
+WHERE cm.room_id = $1 
+    AND cm.is_active = true
+    AND (
+        u.username ILIKE '%' || $2 || '%' 
+        OR u.nickname ILIKE '%' || $2 || '%'
+    );
+
 -- name: GetChatroomOwner :one
 -- 获取聊天室房主
 SELECT 

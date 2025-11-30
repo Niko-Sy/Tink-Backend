@@ -223,11 +223,27 @@ Content-Type: application/json
 
 **接口**: `GET /users/:userId/info`
 
-**响应**: 同3.1，但不包含敏感信息（email, phone等）
+**响应**:不含手机号邮箱敏感信息
 
-### 3.4 搜索用户
+```
+{
+  "code": 200,
+  "data": {
+    "userId": "U123456789",
+    "nickname": "张伟",
+    "name": "张伟",
+    "avatar": "https://example.com/avatar.jpg",
+    "signature": "这个人很懒，什么都没有留下~",
+    "onlineStatus": "online",
+    "accountStatus": "active",
+    "systemRole": "user",
+  }
+}
+```
 
-**接口**: `GET /users/search`
+### 3.4 在聊天室内搜索用户
+
+**接口**: `GET /chatroom/:roomid/members/search`
 
 **查询参数**:
 
@@ -235,7 +251,7 @@ Content-Type: application/json
 ?keyword=张伟&page=1&pageSize=20
 ```
 
-**响应**:
+**响应**: 需要鉴权，若用户不属于聊天室内成员则无法进行搜索获得信息
 
 ```typescript
 {
@@ -344,8 +360,6 @@ Content-Type: application/json
 }
 ```
 
-
-
  **功能** :
 
 1. ✅ 从 JWT Token 获取当前用户 ID
@@ -361,7 +375,6 @@ Content-Type: application/json
 ### 4.3 退出聊天室
 
 **接口**: `POST /chatrooms/leaveroom`
-
 
 **请求体**:
 
@@ -379,8 +392,6 @@ Content-Type: application/json
   "message": "退出成功"
 }
 ```
-
-
 
  **功能** :
 
@@ -480,10 +491,10 @@ Content-Type: application/json
 ✅ 验证用户登录状态
 
 1. ✅ 检查聊天室是否存在
-3. ✅  **权限检查** : 只有房主或管理员可以修改
-4. ✅ 类型转换: `public`→`public`, `private`→`private_invite_only`, `protected`→`private_password`
-5. ✅ 部分更新: 只更新提供的字段（使用指针类型判断）
-6. ✅ 返回更新后的聊天室信息
+2. ✅  **权限检查** : 只有房主或管理员可以修改
+3. ✅ 类型转换: `public`→`public`, `private`→`private_invite_only`, `protected`→`private_password`
+4. ✅ 部分更新: 只更新提供的字段（使用指针类型判断）
+5. ✅ 返回更新后的聊天室信息
 
 ### 4.7 删除聊天室
 
@@ -632,15 +643,15 @@ Content-Type: application/json
 
 ### 6.1 获取聊天室成员列表
 
-**接口**: `GET /chatrooms/:roomId/members`
+**接口**: `GET /chatrooms/:roomId/members/memberlist`
 
 **查询参数**:
 
 ```
-?page=1&pageSize=50&status=online  // status: online|away|offline|all
+?page=1&pageSize=20&status=online // status: online|away|offline|all
 ```
 
-**响应**:
+**响应**: 需要鉴权，若用户不属于聊天室内成员则无法进行获得成员列表信息
 
 ```typescript
 {
@@ -667,16 +678,16 @@ Content-Type: application/json
     "total": 156,
     "onlineCount": 8,
     "page": 1,
-    "pageSize": 50
+    "pageSize": 20
   }
 }
 ```
 
 ### 6.2 获取用户在聊天室的成员信息
 
-**接口**: `GET /chatrooms/:roomId/members/:userId`
+**接口**: `GET /chatrooms/:roomId/members/:userId/info`
 
-**响应**:
+**响应**: 需要鉴权，如果api请求本人不在聊天室内，则接口不应该返回信息
 
 ```typescript
 {
