@@ -708,7 +708,7 @@ Content-Type: application/json
 
 ### 6.3 禁言用户
 
-**接口**: `POST /chatrooms/:roomId/members/:userId/mute`
+**接口**: `POST /chatrooms/:roomId/members/mute`
 
 **权限**: 管理员权限
 
@@ -716,6 +716,7 @@ Content-Type: application/json
 
 ```typescript
 {
+  "memberid": "M_U123456789_100000002"
   "duration": 3600,  // 禁言时长（秒），-1表示永久
   "reason": "违反规定"  // 可选
 }
@@ -735,13 +736,7 @@ Content-Type: application/json
 
 ### 6.4 解除禁言
 
-**接口**: `POST /chatrooms/:roomId/members/:userId/unmute`
-
-**权限**: 管理员权限
-
-### 6.5 踢出成员
-
-**接口**: `POST /chatrooms/:roomId/members/:userId/kick`
+**接口**: `POST /chatrooms/:roomId/members/unmute`
 
 **权限**: 管理员权限
 
@@ -749,15 +744,38 @@ Content-Type: application/json
 
 ```typescript
 {
-  "reason": "违反规定"  // 可选
+  "memberid": "M_U123456789_100000002"
+}
+```
+
+### 6.5 踢出成员
+
+**接口**: `POST /chatrooms/:roomId/members/kick`
+
+**权限**: 管理员权限
+
+**请求体**:
+
+```typescript
+{
+  "memberid": "M_U123456789_100000002"
+  "reason": "违规" //可选
 }
 ```
 
 ### 6.6 设置管理员
 
-**接口**: `POST /chatrooms/:roomId/members/:userId/set-admin`
+**接口**: `POST /chatrooms/:roomId/members/setadmin`
 
 **权限**: 仅房主
+
+**请求体**:
+
+```typescript
+{
+  "memberid":"M_U123456789_100000002" 
+}
+```
 
 **响应**:
 
@@ -773,9 +791,28 @@ Content-Type: application/json
 
 ### 6.7 取消管理员
 
-**接口**: `POST /chatrooms/:roomId/members/:userId/remove-admin`
+**接口**: `POST /chatrooms/:roomId/members/removeadmin`
 
 **权限**: 仅房主
+
+**请求体**:
+
+```typescript
+{
+  "memberid":"M_U123456789_100000002" 
+}
+```
+
+**响应**:
+
+```typescript
+{
+  "code": 200,
+  "message": "移除管理员权限成功",
+}
+```
+
+
 
 ---
 
@@ -1097,7 +1134,7 @@ file: <文件>
   "type": "message",
   "action": "new",
   "data": {
-    "messageId": "M001",
+    "messageId": "M000000000000001",//M+15位数字
     "roomId": "100000002",
     "userId": "U123456790",
     "userName": "李娜",

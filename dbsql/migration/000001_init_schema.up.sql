@@ -323,7 +323,7 @@ ALTER TABLE "mute_records" ADD CONSTRAINT "fk_mute_records_member"
     FOREIGN KEY ("member_rel_id") REFERENCES "chatroom_members"("member_rel_id") ON DELETE CASCADE;
 
 ALTER TABLE "mute_records" ADD CONSTRAINT "fk_mute_records_admin"
-    FOREIGN KEY ("admin_id") REFERENCES "chatroom_members"("member_rel_id") ON DELETE SET NULL;
+    FOREIGN KEY ("admin_id") REFERENCES "users"("user_id") ON DELETE SET NULL;
 
 ALTER TABLE "global_mute_records" ADD CONSTRAINT "fk_global_mute_records_user"
     FOREIGN KEY ("muted_user_id") REFERENCES "users"("user_id") ON DELETE CASCADE;

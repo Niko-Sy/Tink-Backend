@@ -5,6 +5,7 @@ import (
 	"chatroombackend/api/chatroom"
 	"chatroombackend/api/member"
 	"chatroombackend/api/user"
+	"chatroombackend/api/websocketmsg"
 	"chatroombackend/middleware"
 	"log"
 	"os"
@@ -45,8 +46,14 @@ func main() {
 	// 使用数据库中间件
 	router.Use(middleware.DBMiddleware(dbManager))
 
+	// 注入 sql queries 到 websocket 包以支持消息入库与房间管理
+	websocketmsg.SetQueries(dbManager.GetQueries())
+
 	// 数据库健康检查端点
 	router.GET("/health/db", middleware.DBStatusHandler(dbManager))
+
+	// WebSocket 实时通信接口
+	router.GET("/ws", websocketmsg.HandleWebSocket)
 
 	apiV1 := router.Group("/api/v1")
 	{
@@ -79,11 +86,11 @@ func main() {
 					membersgroup.GET("/memberlist", member.HandleListRoomMembers)
 					membersgroup.GET("/search", member.HandleSearchRoomMembers)
 					// membersgroup.GET("/:userid/info", member.HandleGetRoomMemberInfo)
-					// membersgroup.POST("/:userid/kick", member.HandleKickRoomMember)
-					// membersgroup.POST("/:userid/mute", member.HandleMuteRoomMember)
-					// membersgroup.POST("/:userid/unmute", member.HandleUnmuteRoomMember)
-					// membersgroup.POST("/:userid/setadmin", member.HandleSetAdminRoomMember)
-					// membersgroup.POST("/:userid/removeadmin", member.HandleRemoveAdminRoomMember)
+					membersgroup.POST("/kick", member.HandleKickRoomMember)
+					membersgroup.POST("/mute", member.HandleMuteRoomMember)
+					membersgroup.POST("/unmute", member.HandleUnmuteRoomMember)
+					membersgroup.POST("/setadmin", member.HandleSetAdminRoomMember)
+					membersgroup.POST("/removeadmin", member.HandleRemoveAdminRoomMember)
 				}
 			}
 		}

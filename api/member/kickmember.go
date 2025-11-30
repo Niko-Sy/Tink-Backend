@@ -8,19 +8,20 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-type SetAdminRequest struct {
+type KickRequest struct {
 	MemberID string `json:"memberid" binding:"required"`
+	Reason   string `json:"reason"`
 }
 
-// HandleSetAdminRoomMember 房主设置管理员
-func HandleSetAdminRoomMember(c *gin.Context) {
+// HandleKickRoomMember 管理员踢出成员
+func HandleKickRoomMember(c *gin.Context) {
 	roomID := c.Param("roomid")
 	if roomID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "roomId required"})
 		return
 	}
 
-	var req SetAdminRequest
+	var req KickRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "invalid request", "error": err.Error()})
 		return
@@ -38,13 +39,20 @@ func HandleSetAdminRoomMember(c *gin.Context) {
 		return
 	}
 
-	// 检查房主权限
-	isOwner, err := queries.IsUserOwner(c.Request.Context(), sqlcdb.IsUserOwnerParams{UserID: currentUser, RoomID: roomID})
-	if err != nil || !isOwner {
-		c.JSON(http.StatusForbidden, gin.H{"code": 403, "message": "only owner can set admin"})
+	// 检查房间存在
+	if _, err := queries.GetChatroomByID(c.Request.Context(), roomID); err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"code": 404, "message": "chatroom not found"})
 		return
 	}
 
+	// 权限检查：必须是管理员或房主
+	isAdmin, err := queries.IsUserAdminOrOwner(c.Request.Context(), sqlcdb.IsUserAdminOrOwnerParams{UserID: currentUser, RoomID: roomID})
+	if err != nil || !isAdmin {
+		c.JSON(http.StatusForbidden, gin.H{"code": 403, "message": "permission denied"})
+		return
+	}
+
+	// 获取 member 关系
 	member, err := queries.GetMemberByRelID(c.Request.Context(), req.MemberID)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "member not found", "error": err.Error()})
@@ -55,10 +63,14 @@ func HandleSetAdminRoomMember(c *gin.Context) {
 		return
 	}
 
-	if err := queries.SetMemberAsAdmin(c.Request.Context(), sqlcdb.SetMemberAsAdminParams{UserID: member.UserID, RoomID: roomID}); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": "set admin failed", "error": err.Error()})
+	// 执行踢出（设置 is_active = false, left_at = NOW()）
+	if err := queries.KickMember(c.Request.Context(), sqlcdb.KickMemberParams{UserID: member.UserID, RoomID: roomID}); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": "kick failed", "error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"code": 200, "message": "设置成功", "data": gin.H{"roomRole": "admin"}})
+	// 同步成员计数（减少）
+	_ = queries.DecrementChatroomMemberCount(c.Request.Context(), roomID)
+
+	c.JSON(http.StatusOK, gin.H{"code": 200, "message": "踢出成功"})
 }
