@@ -101,7 +101,7 @@ CREATE TABLE "users" (
                          "avatar_url" TEXT DEFAULT 'https://example.com/default-avatar.jpg',                                   -- 头像
                          "bio" TEXT DEFAULT '这个人很懒，什么都没有留下~',                                          -- 个性签名
                          "online_status" user_online_status DEFAULT 'offline',-- 在线状态
-                         "account_status" user_account_status DEFAULT 'pending_verification', -- 账号状态
+                         "account_status" user_account_status DEFAULT 'active', -- 账号状态
                          "system_role" user_system_role DEFAULT 'user',       -- 系统角色
                          "registered_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP, -- 注册时间
                          "last_login_at" TIMESTAMPTZ                           -- 最后登录时间
@@ -184,18 +184,18 @@ DECLARE
 BEGIN
     next_id := nextval('Message_idSeq');
 
-    NEW.message_id :='M'||LPAD(next_id::text, 15, '0');
+    NEW.message_id :='M'||LPAD(next_id::text, 20, '0');
 
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 
 CREATE TABLE "messages" (
-                            "message_id" varchar(16) PRIMARY KEY ,    -- 消息编号
+                            "message_id" varchar(21) PRIMARY KEY ,    -- 消息编号
                             "sent_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,    -- 发送时间
                             "content" TEXT NOT NULL,                                   -- 消息内容
                             "message_type" message_type NOT NULL DEFAULT 'text',       -- 消息类型
-                            "quoted_message_id" varchar(9),                                  -- 引用消息编号
+                            "quoted_message_id" varchar(21),                                  -- 引用消息编号
                             "sender_id" varchar(10),                                          -- 发送用户编号
                             "room_id" varchar(9) NOT NULL                                    -- 发送聊天室编号
 );

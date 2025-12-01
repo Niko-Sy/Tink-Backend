@@ -21,6 +21,7 @@ type ImageConfig struct {
 	MaxSize       int64    // 最大文件大小（字节）
 	AllowedTypes  []string // 允许的文件类型
 	URLPrefix     string   // URL 前缀
+	BaseURL       string   // 服务器基础URL，例如 "http://localhost:8080"
 	DefaultAvatar string   // 默认头像
 }
 
@@ -30,6 +31,7 @@ var DefaultImageConfig = ImageConfig{
 	MaxSize:       5 * 1024 * 1024, // 5MB
 	AllowedTypes:  []string{"image/jpeg", "image/png", "image/gif", "image/webp"},
 	URLPrefix:     "/static/images",
+	BaseURL:       "http://localhost:8080",
 	DefaultAvatar: "https://example.com/default-avatar.jpg",
 }
 
@@ -118,7 +120,7 @@ func (u *ImageUploader) SaveFile(file *multipart.FileHeader, fileName string) (*
 	return &UploadResult{
 		FileName:    fileName,
 		FilePath:    filePath,
-		FileURL:     fmt.Sprintf("%s/%s", u.config.URLPrefix, fileName),
+		FileURL:     fmt.Sprintf("%s%s/%s", u.config.BaseURL, u.config.URLPrefix, fileName),
 		FileSize:    file.Size,
 		ContentType: file.Header.Get("Content-Type"),
 	}, nil
@@ -163,7 +165,7 @@ func (u *ImageUploader) UploadAvatar(file *multipart.FileHeader, userID string) 
 	return &UploadResult{
 		FileName:    fileName,
 		FilePath:    filePath,
-		FileURL:     fmt.Sprintf("%s/avatars/%s", u.config.URLPrefix, fileName),
+		FileURL:     fmt.Sprintf("%s%s/avatars/%s", u.config.BaseURL, u.config.URLPrefix, fileName),
 		FileSize:    file.Size,
 		ContentType: file.Header.Get("Content-Type"),
 	}, nil
@@ -207,7 +209,7 @@ func (u *ImageUploader) UploadChatImage(file *multipart.FileHeader, userID strin
 	return &UploadResult{
 		FileName:    fileName,
 		FilePath:    filePath,
-		FileURL:     fmt.Sprintf("%s/chat/%s/%s", u.config.URLPrefix, roomID, fileName),
+		FileURL:     fmt.Sprintf("%s%s/chat/%s/%s", u.config.BaseURL, u.config.URLPrefix, roomID, fileName),
 		FileSize:    file.Size,
 		ContentType: file.Header.Get("Content-Type"),
 	}, nil

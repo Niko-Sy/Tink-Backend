@@ -31,8 +31,8 @@
 ### 1.1 基础URL
 
 ```
-开发环境: http://localhost:3000/api
-生产环境: https://api.tink.chat/api
+开发环境: http://localhost:8080/api/v1
+生产环境: https://api.tink.chat/api/v1
 ```
 
 ### 1.2 请求头
@@ -125,7 +125,7 @@ Content-Type: application/json
 
 ### 2.3 退出登录
 
-**接口**: `POST /auth/logout`
+**接口**: `GET /auth/logout`
 
 **请求头**: 需要 Authorization
 
@@ -140,7 +140,7 @@ Content-Type: application/json
 
 ### 2.4 刷新Token
 
-**接口**: `POST /auth/refresh-token`
+**接口**: `GET /auth/refresh`
 
 **请求头**: 需要 Authorization
 
@@ -159,7 +159,7 @@ Content-Type: application/json
 
 ### 2.5 修改密码
 
-**接口**: `POST /auth/change-password`
+**接口**: `POST /auth/changepwd`
 
 **请求体**:
 
@@ -176,7 +176,7 @@ Content-Type: application/json
 
 ### 3.1 获取当前用户信息
 
-**接口**: `GET /users/me/info`
+**接口**: `GET /users/me/userinfo`
 
 **响应**:
 
@@ -221,7 +221,7 @@ Content-Type: application/json
 
 ### 3.3 根据ID获取用户信息
 
-**接口**: `GET /users/:userId/info`
+**接口**: `GET /users/:userid/info`
 
 **响应**:不含手机号邮箱敏感信息
 
@@ -291,7 +291,7 @@ Content-Type: application/json
 
 ### 4.1 创建聊天室
 
-**接口**: `POST /chatrooms/createroom`
+**接口**: `POST /chatroom/createroom`
 
 **请求体**:
 
@@ -328,7 +328,7 @@ Content-Type: application/json
 
 ### 4.2 加入聊天室
 
-**接口**: `POST /chatrooms/joinroom`
+**接口**: `POST /chatroom/joinroom`
 
 **请求体**:
 
@@ -374,7 +374,7 @@ Content-Type: application/json
 
 ### 4.3 退出聊天室
 
-**接口**: `POST /chatrooms/leaveroom`
+**接口**: `POST /chatroom/leaveroom`
 
 **请求体**:
 
@@ -448,7 +448,7 @@ Content-Type: application/json
 
 ### 4.5 获取聊天室详情
 
-**接口**: `GET /chatrooms/:roomId/info`
+**接口**: `GET /chatroom/:roomid/info`
 
 **响应**:
 
@@ -472,7 +472,7 @@ Content-Type: application/json
 
 ### 4.6 更新聊天室信息
 
-**接口**: `POST /chatrooms/:roomId/update`
+**接口**: `POST /chatroom/:roomid/update`
 
 **权限**: 需要管理员权限
 
@@ -498,7 +498,7 @@ Content-Type: application/json
 
 ### 4.7 删除聊天室
 
-**接口**: `POST /chatrooms/:roomId/delete`
+**接口**: `POST /chatroom/:roomid/delete`
 
 **权限**: 仅创建者可删除
 
@@ -513,15 +513,15 @@ Content-Type: application/json
 
 ### 5.1 发送消息
 
-**接口**: `POST /chatrooms/:roomId/messages`
+**接口**: `POST /chatroom/:roomid/messages`
 
 **请求体**:
 
 ```typescript
 {
-  "type": "text" | "image" | "file",
-  "text": "消息内容",
-  "replyToMessageId": "M001"  // 可选，回复的消息ID
+  "type": "text" | "image" | "file",  // 必填，消息类型
+  "text": "消息内容",                   // 必填，消息文本
+  "replyToMessageId": "M001"           // 可选，回复的消息ID
 }
 ```
 
@@ -530,28 +530,51 @@ Content-Type: application/json
 ```typescript
 {
   "code": 200,
+  "message": "消息发送成功",
   "data": {
-    "messageId": "M001",
+    "messageId": "M000000000000001",   // M+15位数字
     "roomId": "100000002",
     "userId": "U123456789",
     "userName": "张伟",
     "type": "text",
     "text": "消息内容",
     "time": "2025-11-23T10:00:00Z",
-    "isOwn": true,
-    "importmessageId": ""
+    "isOwn": true
   }
 }
 ```
 
+**功能说明**:
+1. ✅ 验证用户是否在聊天室中
+2. ✅ 检查用户禁言状态（全局禁言 + 聊天室禁言）
+3. ✅ 创建消息并保存到数据库
+4. ✅ 通过 WebSocket 实时广播消息到房间所有在线成员
+5. ✅ 异步更新聊天室最后活跃时间
+
 ### 5.2 获取聊天室消息历史
 
-**接口**: `GET /chatrooms/:roomId/messages`
+**接口**: `GET /chatroom/:roomid/messages`
 
 **查询参数**:
 
 ```
-?page=1&pageSize=50&before=M100  // before: 获取指定消息之前的消息
+?page=1&pageSize=50           // 传统分页：page=1 返回最新消息
+?before=M100&pageSize=50      // 游标分页：获取指定消息之前（更早）的消息
+```
+
+**分页设计说明**:
+
+```
+时间轴:  [最早] ←←←←←←←←←←←←←←← [最新]
+消息ID:  M1 ← M2 ← M3 ... ← M98 ← M99 ← M100
+         
+查询结果（降序）:
+page=1:  [M100, M99, M98, ..., M51]  ← 最新 50 条
+page=2:  [M50, M49, M48, ..., M1]    ← 更早 50 条
+
+游标分页:
+?page=1              → [M100...M51]
+?before=M51          → [M50...M1]   ← 获取 M51 之前的消息
 ```
 
 **响应**:
@@ -562,7 +585,7 @@ Content-Type: application/json
   "data": {
     "messages": [
       {
-        "messageId": "M001",
+        "messageId": "M000000000000001",
         "roomId": "100000002",
         "userId": "U123456790",
         "userName": "李娜",
@@ -571,7 +594,8 @@ Content-Type: application/json
         "time": "2025-11-23T10:00:00Z",
         "isOwn": false,
         "isEdited": false,
-        "editedAt": null
+        "editedAt": null,
+        "replyToMessageId": null      // 可选，回复的消息ID
       }
     ],
     "total": 1000,
@@ -582,9 +606,14 @@ Content-Type: application/json
 }
 ```
 
+**前端使用建议**:
+- 首次加载：`GET /messages?page=1&pageSize=50`
+- 向上滚动加载历史：`GET /messages?before=<最早消息ID>&pageSize=50`
+- 前端需要将返回的消息列表反转显示（最早的在上，最新的在下）
+
 ### 5.3 撤回/删除消息
 
-**接口**: `POST /chatrooms/:roomId/messages/:messageId/delete`
+**接口**: `POST /chatroom/:roomid/messages/:messageid/delete`
 
 **权限**: 消息发送者或管理员
 
@@ -599,7 +628,7 @@ Content-Type: application/json
 
 ### 5.4 编辑消息
 
-**接口**: `POST /chatrooms/:roomId/messages/:messageId/edit`
+**接口**: `POST /chatroom/:roomid/messages/:messageid/edit`
 
 **权限**: 消息发送者或管理员
 
@@ -617,7 +646,7 @@ Content-Type: application/json
 {
   "code": 200,
   "data": {
-    "messageId": "M001",
+    "messageId": "M000000000000001",
     "text": "编辑后的内容",
     "isEdited": true,
     "editedAt": "2025-11-23T10:05:00Z"
@@ -627,7 +656,7 @@ Content-Type: application/json
 
 ### 5.5 标记消息已读
 
-**接口**: `POST /chatrooms/:roomId/messages/read`
+**接口**: `POST /chatroom/:roomid/messages/read`
 
 **请求体**:
 
@@ -643,7 +672,7 @@ Content-Type: application/json
 
 ### 6.1 获取聊天室成员列表
 
-**接口**: `GET /chatrooms/:roomId/members/memberlist`
+**接口**: `GET /chatroom/:roomid/members/memberlist`
 
 **查询参数**:
 
@@ -685,7 +714,7 @@ Content-Type: application/json
 
 ### 6.2 获取用户在聊天室的成员信息
 
-**接口**: `GET /chatrooms/:roomId/members/:userId/info`
+**接口**: `GET /chatroom/:roomid/members/:userid/info`
 
 **响应**: 需要鉴权，如果api请求本人不在聊天室内，则接口不应该返回信息
 
@@ -708,7 +737,7 @@ Content-Type: application/json
 
 ### 6.3 禁言用户
 
-**接口**: `POST /chatrooms/:roomId/members/mute`
+**接口**: `POST /chatroom/:roomid/members/mute`
 
 **权限**: 管理员权限
 
@@ -736,7 +765,7 @@ Content-Type: application/json
 
 ### 6.4 解除禁言
 
-**接口**: `POST /chatrooms/:roomId/members/unmute`
+**接口**: `POST /chatroom/:roomid/members/unmute`
 
 **权限**: 管理员权限
 
@@ -750,7 +779,7 @@ Content-Type: application/json
 
 ### 6.5 踢出成员
 
-**接口**: `POST /chatrooms/:roomId/members/kick`
+**接口**: `POST /chatroom/:roomid/members/kick`
 
 **权限**: 管理员权限
 
@@ -765,7 +794,7 @@ Content-Type: application/json
 
 ### 6.6 设置管理员
 
-**接口**: `POST /chatrooms/:roomId/members/setadmin`
+**接口**: `POST /chatroom/:roomid/members/setadmin`
 
 **权限**: 仅房主
 
@@ -791,7 +820,7 @@ Content-Type: application/json
 
 ### 6.7 取消管理员
 
-**接口**: `POST /chatrooms/:roomId/members/removeadmin`
+**接口**: `POST /chatroom/:roomid/members/removeadmin`
 
 **权限**: 仅房主
 
@@ -919,7 +948,7 @@ Content-Type: application/json
 
 ### 7.5 删除好友
 
-**接口**: `POST /friends/:userId/delete`
+**接口**: `POST /friends/:userid/delete`
 
 ---
 
@@ -1007,38 +1036,65 @@ Content-Type: application/json
 
 ### 9.1 上传头像
 
-**接口**: `POST /upload/avatar`
+**接口**: `POST /users/me/uploadavatar`
 
 **请求**: multipart/form-data
 
 ```
-file: <文件>
+file: <图片文件>
 ```
+
+**限制**: 最大 5MB，支持 jpg/png/gif/webp
 
 **响应**:
 
 ```typescript
 {
   "code": 200,
+  "message": "上传成功",
   "data": {
-    "url": "https://cdn.example.com/avatars/xxx.jpg",
-    "size": 102400,
-    "type": "image/jpeg"
+    "url": "/static/images/avatars/avatar_U123456789_xxxx.jpg",
+    "fileName": "avatar_U123456789_xxxx.jpg",
+    "fileSize": 102400
   }
 }
 ```
 
 ### 9.2 上传聊天图片
 
-**接口**: `POST /upload/image`
+**接口**: `POST /chatroom/:roomid/uploadimage`
 
-**限制**: 最大5MB，支持jpg/png/gif
+**请求**: multipart/form-data
 
-### 9.3 上传文件
+```
+file: <图片文件>
+```
 
-**接口**: `POST /upload/file`
+**限制**: 最大 5MB，支持 jpg/png/gif/webp
 
-**限制**: 最大100MB
+**响应**:
+
+```typescript
+{
+  "code": 200,
+  "message": "上传成功",
+  "data": {
+    "url": "/static/images/chat/100000002/chat_U123456789_xxxx.jpg",
+    "fileName": "chat_U123456789_xxxx.jpg",
+    "fileSize": 204800
+  }
+}
+```
+
+### 9.3 获取图片
+
+**接口**: `GET /static/images/*filepath`
+
+**说明**: 静态文件服务，直接返回图片文件
+
+**路径结构**:
+- 头像: `/static/images/avatars/{filename}`
+- 聊天图片: `/static/images/chat/{roomId}/{filename}`
 
 ---
 
@@ -1101,106 +1157,144 @@ file: <文件>
 
 ## 11. 实时通信接口（WebSocket）
 
-### 11.1 连接
+### 11.1 连接建立
 
-**URL**: `ws://localhost:3000/ws` 或 `wss://api.tink.chat/ws`
+**URL**: `ws://localhost:8080/ws` 或 `wss://api.tink.chat/ws`
 
-**连接时携带**:
+**连接参数**:
 
 ```
 ?token=<jwt_token>
 ```
 
-### 11.2 消息格式
+**连接流程**:
 
-#### 客户端发送消息
+```
+1. 客户端携带 JWT Token 发起 WebSocket 连接
+2. 服务端验证 Token 有效性
+3. 验证通过后建立连接，自动完成以下操作：
+   - 将用户标记为在线状态
+   - 自动订阅用户加入的所有聊天室
+   - 增加各聊天室的在线人数计数
+4. 连接断开时自动执行：
+   - 将用户标记为离线状态
+   - 从所有聊天室取消订阅
+   - 减少各聊天室的在线人数计数
+```
+
+**连接示例**:
+
+```javascript
+const token = localStorage.getItem('token');
+const ws = new WebSocket(`ws://localhost:8080/ws?token=${token}`);
+
+ws.onopen = () => {
+  console.log('WebSocket 连接成功');
+  
+  // 启动心跳检测（每30秒）
+  setInterval(() => {
+    ws.send(JSON.stringify({ type: 'ping' }));
+  }, 30000);
+};
+
+ws.onclose = (event) => {
+  console.log('WebSocket 连接关闭', event.code);
+  // 实现重连逻辑
+};
+
+ws.onerror = (error) => {
+  console.error('WebSocket 错误', error);
+};
+```
+
+---
+
+### 11.2 消息格式规范
+
+#### 通用消息结构
+
+```typescript
+interface WSMessage {
+  type: string;           // 消息类型
+  action?: string;        // 操作类型
+  data?: any;             // 消息数据
+}
+```
+
+---
+
+### 11.3 客户端发送消息
+
+#### 11.3.1 发送聊天消息
 
 ```typescript
 {
   "type": "message",
   "action": "send",
   "data": {
-    "roomId": "100000002",
-    "messageType": "text",
-    "text": "消息内容"
+    "roomId": "100000002",           // 必填，聊天室ID
+    "messageType": "text",           // 必填，消息类型: text|image|file
+    "text": "消息内容",               // 必填，消息文本
+    "quotedMessageId": "M001"        // 可选，回复的消息ID
   }
 }
 ```
 
-#### 服务端推送新消息
+**服务端处理流程**:
+1. 验证用户是否在聊天室中
+2. 检查用户禁言状态（全局禁言 + 聊天室禁言）
+3. 创建消息并保存到数据库
+4. 广播消息到聊天室所有在线成员
+5. 异步更新聊天室最后活跃时间
+
+**错误响应**:
+
+```typescript
+// 不在聊天室中
+{
+  "type": "error",
+  "action": "not_in_room",
+  "data": { "message": "not in room" }
+}
+
+// 被禁言
+{
+  "type": "error",
+  "action": "muted",
+  "data": { "message": "muted" }
+}
+```
+
+#### 11.3.2 心跳包
+
+```typescript
+// 客户端发送（建议每30秒）
+{ "type": "ping" }
+```
+
+---
+
+### 11.4 服务端推送消息
+
+#### 11.4.1 新消息通知
 
 ```typescript
 {
   "type": "message",
   "action": "new",
   "data": {
-    "messageId": "M000000000000001",//M+15位数字
+    "messageId": "M000000000000001",  // M+15位数字
     "roomId": "100000002",
     "userId": "U123456790",
-    "userName": "李娜",
+    "userName": "李娜",                // 优先显示昵称，无则显示用户名
     "type": "text",
     "text": "消息内容",
-    "time": "2025-11-23T10:00:00Z"
+    "time": "2025-11-23T10:00:00Z"    // ISO 8601 格式
   }
 }
 ```
 
-#### 用户上线/下线通知
-
-```typescript
-{
-  "type": "user_status",
-  "action": "online" | "offline",
-  "data": {
-    "userId": "U123456790",
-    "status": "online"
-  }
-}
-```
-
-#### 聊天室成员变动
-
-```typescript
-{
-  "type": "room_member",
-  "action": "join" | "leave" | "kick",
-  "data": {
-    "roomId": "100000002",
-    "userId": "U123456790",
-    "userName": "李娜"
-  }
-}
-```
-
-#### 禁言通知
-
-```typescript
-{
-  "type": "mute",
-  "action": "muted" | "unmuted",
-  "data": {
-    "roomId": "100000002",
-    "userId": "U123456789",
-    "muteUntil": "2025-11-23T11:00:00Z",
-    "reason": "违反规定"
-  }
-}
-```
-
-#### 消息撤回通知
-
-```typescript
-{
-  "type": "message",
-  "action": "delete",
-  "data": {
-    "roomId": "100000002",
-    "messageId": "M001"
-  }
-}
-```
-
-#### 消息编辑通知
+#### 11.4.2 消息编辑通知
 
 ```typescript
 {
@@ -1215,19 +1309,441 @@ file: <文件>
 }
 ```
 
-#### 心跳包
+#### 11.4.3 消息删除通知
 
 ```typescript
-// 客户端发送（每30秒）
 {
-  "type": "ping"
-}
-
-// 服务端响应
-{
-  "type": "pong"
+  "type": "message",
+  "action": "delete",
+  "data": {
+    "roomId": "100000002",
+    "messageId": "M001"
+  }
 }
 ```
+
+#### 11.4.4 用户上线/下线通知
+
+```typescript
+{
+  "type": "user_status",
+  "action": "online" | "offline",
+  "data": {
+    "userId": "U123456790",
+    "userName": "李娜",
+    "status": "online" | "offline",
+    "roomId": "100000002"            // 相关聊天室
+  }
+}
+```
+
+#### 11.4.5 聊天室成员变动
+
+```typescript
+{
+  "type": "room_member",
+  "action": "join" | "leave" | "kick",
+  "data": {
+    "roomId": "100000002",
+    "userId": "U123456790",
+    "userName": "李娜",
+    "operatorId": "U123456789",       // kick 时的操作者
+    "reason": "违规行为"               // kick 时的原因（可选）
+  }
+}
+```
+
+#### 11.4.6 禁言通知
+
+```typescript
+{
+  "type": "mute",
+  "action": "muted" | "unmuted",
+  "data": {
+    "roomId": "100000002",
+    "userId": "U123456789",
+    "muteUntil": "2025-11-23T11:00:00Z",  // muted 时必有
+    "reason": "违反规定",                   // 可选
+    "operatorId": "U123456788"             // 操作者ID
+  }
+}
+```
+
+#### 11.4.7 心跳响应
+
+```typescript
+{ "type": "pong" }
+```
+
+---
+
+### 11.5 前端完整实现示例
+
+```javascript
+class WebSocketClient {
+  constructor(token) {
+    this.token = token;
+    this.ws = null;
+    this.reconnectAttempts = 0;
+    this.maxReconnectAttempts = 5;
+    this.heartbeatInterval = null;
+    this.messageHandlers = new Map();
+  }
+
+  connect() {
+    this.ws = new WebSocket(`ws://localhost:8080/ws?token=${this.token}`);
+
+    this.ws.onopen = () => {
+      console.log('WebSocket 连接成功');
+      this.reconnectAttempts = 0;
+      this.startHeartbeat();
+    };
+
+    this.ws.onmessage = (event) => {
+      const msg = JSON.parse(event.data);
+      this.handleMessage(msg);
+    };
+
+    this.ws.onclose = (event) => {
+      console.log('WebSocket 连接关闭', event.code);
+      this.stopHeartbeat();
+      this.attemptReconnect();
+    };
+
+    this.ws.onerror = (error) => {
+      console.error('WebSocket 错误', error);
+    };
+  }
+
+  startHeartbeat() {
+    this.heartbeatInterval = setInterval(() => {
+      if (this.ws.readyState === WebSocket.OPEN) {
+        this.ws.send(JSON.stringify({ type: 'ping' }));
+      }
+    }, 30000);
+  }
+
+  stopHeartbeat() {
+    if (this.heartbeatInterval) {
+      clearInterval(this.heartbeatInterval);
+      this.heartbeatInterval = null;
+    }
+  }
+
+  attemptReconnect() {
+    if (this.reconnectAttempts < this.maxReconnectAttempts) {
+      this.reconnectAttempts++;
+      const delay = Math.min(1000 * Math.pow(2, this.reconnectAttempts), 30000);
+      console.log(`${delay}ms 后尝试重连...`);
+      setTimeout(() => this.connect(), delay);
+    }
+  }
+
+  handleMessage(msg) {
+    switch (msg.type) {
+      case 'pong':
+        // 心跳响应，无需处理
+        break;
+      case 'message':
+        this.handleChatMessage(msg);
+        break;
+      case 'user_status':
+        this.handleUserStatus(msg);
+        break;
+      case 'room_member':
+        this.handleRoomMember(msg);
+        break;
+      case 'mute':
+        this.handleMute(msg);
+        break;
+      case 'error':
+        this.handleError(msg);
+        break;
+    }
+  }
+
+  handleChatMessage(msg) {
+    switch (msg.action) {
+      case 'new':
+        // 新消息：追加到消息列表
+        this.emit('newMessage', msg.data);
+        break;
+      case 'edit':
+        // 消息编辑：更新对应消息内容
+        this.emit('editMessage', msg.data);
+        break;
+      case 'delete':
+        // 消息删除：从列表移除或显示"已删除"
+        this.emit('deleteMessage', msg.data);
+        break;
+    }
+  }
+
+  handleUserStatus(msg) {
+    this.emit('userStatus', msg.data);
+  }
+
+  handleRoomMember(msg) {
+    this.emit('roomMember', { action: msg.action, ...msg.data });
+  }
+
+  handleMute(msg) {
+    this.emit('mute', { action: msg.action, ...msg.data });
+  }
+
+  handleError(msg) {
+    console.error('WebSocket 错误:', msg.action, msg.data);
+    this.emit('error', { action: msg.action, ...msg.data });
+  }
+
+  // 发送聊天消息
+  sendMessage(roomId, text, messageType = 'text', quotedMessageId = null) {
+    const msg = {
+      type: 'message',
+      action: 'send',
+      data: {
+        roomId,
+        messageType,
+        text,
+        ...(quotedMessageId && { quotedMessageId })
+      }
+    };
+    this.ws.send(JSON.stringify(msg));
+  }
+
+  // 事件订阅
+  on(event, handler) {
+    if (!this.messageHandlers.has(event)) {
+      this.messageHandlers.set(event, []);
+    }
+    this.messageHandlers.get(event).push(handler);
+  }
+
+  emit(event, data) {
+    const handlers = this.messageHandlers.get(event) || [];
+    handlers.forEach(handler => handler(data));
+  }
+
+  disconnect() {
+    this.stopHeartbeat();
+    if (this.ws) {
+      this.ws.close();
+    }
+  }
+}
+
+// 使用示例
+const wsClient = new WebSocketClient(token);
+wsClient.connect();
+
+wsClient.on('newMessage', (data) => {
+  console.log('收到新消息:', data);
+  appendMessageToChat(data);
+});
+
+wsClient.on('editMessage', (data) => {
+  console.log('消息已编辑:', data);
+  updateMessageInChat(data.messageId, data.newText);
+});
+
+wsClient.on('deleteMessage', (data) => {
+  console.log('消息已删除:', data);
+  removeMessageFromChat(data.messageId);
+});
+
+wsClient.on('mute', (data) => {
+  if (data.action === 'muted') {
+    showMuteNotification(data);
+  }
+});
+
+// 发送消息
+wsClient.sendMessage('100000002', '你好，大家！');
+
+// 回复消息
+wsClient.sendMessage('100000002', '这是回复', 'text', 'M000000000000001');
+```
+
+---
+
+### 11.6 历史消息加载（HTTP API 配合）
+
+WebSocket 用于实时消息推送，历史消息通过 HTTP API 获取。
+
+#### 分页设计原则
+
+**page=1 返回最新消息，page 越大返回越早的历史消息**
+
+```
+时间轴:  [最早] ←←←←←←←←←←←←←←← [最新]
+                                    ↑
+消息ID:  M1 ← M2 ← M3 ... ← M98 ← M99 ← M100
+         
+查询结果（降序）:
+page=1:  [M100, M99, M98, ..., M51]  ← 最新 50 条
+page=2:  [M50, M49, M48, ..., M1]    ← 更早 50 条
+
+游标分页:
+?page=1              → [M100...M51]
+?before=M51          → [M50...M1]   ← 获取 M51 之前的消息
+```
+
+#### 完整消息列表组件示例
+
+```javascript
+class MessageList {
+  constructor(roomId, token, wsClient) {
+    this.roomId = roomId;
+    this.token = token;
+    this.wsClient = wsClient;
+    this.messages = [];
+    this.oldestMessageId = null;
+    this.loading = false;
+
+    // 监听 WebSocket 新消息
+    this.wsClient.on('newMessage', (data) => {
+      if (data.roomId === this.roomId) {
+        this.addNewMessage(data);
+      }
+    });
+  }
+
+  async loadInitial() {
+    const response = await fetch(
+      `/api/v1/chatroom/${this.roomId}/messages?page=1&pageSize=50`,
+      { headers: { 'Authorization': `Bearer ${this.token}` } }
+    );
+    const data = await response.json();
+
+    if (data.code === 200 && data.data.messages.length > 0) {
+      // 后端返回降序，前端反转为升序显示
+      this.messages = data.data.messages.reverse();
+      this.oldestMessageId = this.messages[0].messageId;
+      this.render();
+      this.scrollToBottom();
+    }
+  }
+
+  async loadMore() {
+    if (this.loading || !this.oldestMessageId) return false;
+
+    this.loading = true;
+    const response = await fetch(
+      `/api/v1/chatroom/${this.roomId}/messages?before=${this.oldestMessageId}&pageSize=50`,
+      { headers: { 'Authorization': `Bearer ${this.token}` } }
+    );
+    const data = await response.json();
+
+    if (data.code === 200 && data.data.messages.length > 0) {
+      const olderMessages = data.data.messages.reverse();
+      this.messages = [...olderMessages, ...this.messages];
+      this.oldestMessageId = olderMessages[0].messageId;
+      this.render();
+    }
+
+    this.loading = false;
+    return data.data.hasMore;
+  }
+
+  addNewMessage(message) {
+    this.messages.push(message);
+    this.render();
+    this.scrollToBottom();
+  }
+
+  render() {
+    const container = document.getElementById('messages');
+    container.innerHTML = this.messages
+      .map(msg => this.renderMessage(msg))
+      .join('');
+  }
+
+  renderMessage(msg) {
+    const isOwn = msg.userId === currentUserId;
+    return `
+      <div class="message ${isOwn ? 'own' : ''}">
+        <span class="user">${msg.userName}</span>
+        <span class="text">${msg.text}</span>
+        <span class="time">${new Date(msg.time).toLocaleTimeString()}</span>
+      </div>
+    `;
+  }
+
+  scrollToBottom() {
+    const container = document.getElementById('messages');
+    container.scrollTop = container.scrollHeight;
+  }
+}
+
+// 使用
+const messageList = new MessageList('100000002', token, wsClient);
+await messageList.loadInitial();
+
+// 监听滚动加载更多
+document.getElementById('messages').addEventListener('scroll', async (e) => {
+  if (e.target.scrollTop < 100) {
+    const hasMore = await messageList.loadMore();
+    if (!hasMore) {
+      console.log('没有更多历史消息了');
+    }
+  }
+});
+```
+
+---
+
+### 11.7 技术规格
+
+| 参数 | 值 | 说明 |
+|------|------|------|
+| 心跳间隔 | 30秒 | 客户端发送 ping |
+| 读取超时 | 60秒 | 无消息则断开 |
+| 写入超时 | 10秒 | 发送消息超时 |
+| 消息缓冲 | 256条 | 每个连接的发送队列 |
+| 最大消息大小 | 512字节 | 单条 WebSocket 消息 |
+
+---
+
+### 11.8 错误处理
+
+| 错误类型 | action | 说明 | 处理建议 |
+|----------|--------|------|----------|
+| 未在聊天室 | `not_in_room` | 用户不是聊天室成员 | 提示用户先加入聊天室 |
+| 被禁言 | `muted` | 用户被禁言无法发言 | 显示禁言提示和剩余时间 |
+| Token 无效 | 连接失败 | JWT 过期或无效 | 刷新 Token 后重连 |
+
+---
+
+### 11.9 安全性
+
+#### 已实现
+- ✅ JWT Token 认证
+- ✅ 聊天室成员身份验证
+- ✅ 禁言状态检查（全局 + 聊天室）
+- ✅ 消息发送权限验证
+
+#### 建议加强
+- 📋 消息内容过滤（敏感词、XSS）
+- 📋 频率限制（每分钟最多 N 条消息）
+- 📋 消息大小限制
+- 📋 CORS 域名白名单
+
+---
+
+### 11.10 性能优化
+
+#### 已实现
+- ✅ 连接池管理（Hub 统一管理）
+- ✅ 消息通道缓冲（256 条）
+- ✅ 异步更新聊天室活跃时间
+- ✅ 读写分离（readPump / writePump）
+- ✅ 心跳保活机制
+- ✅ 断线重连支持
+
+#### 待优化
+- 📋 Redis 缓存热点消息
+- 📋 消息队列处理广播
+- 📋 水平扩展（多 WebSocket 服务器）
 
 ---
 

@@ -103,7 +103,7 @@ func (q *Queries) DeleteMessage(ctx context.Context, messageID string) error {
 const deleteMessageSoft = `-- name: DeleteMessageSoft :one
 UPDATE messages 
 SET 
-    content = '该消息已被删除',
+    content = '该消息已被撤回',
     message_type = 'system_notification'
 WHERE message_id = $1
 RETURNING 

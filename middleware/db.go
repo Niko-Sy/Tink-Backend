@@ -2,6 +2,7 @@ package middleware
 
 import (
 	sqlcdb "chatroombackend/db"
+	"chatroombackend/logger"
 	"context"
 	"database/sql"
 	"errors"
@@ -43,11 +44,12 @@ func DefaultDBConfig() *DBConfig {
 
 // DBManager 数据库管理器
 type DBManager struct {
-	db      *sql.DB
-	queries *sqlcdb.Queries
-	config  *DBConfig
-	mu      sync.RWMutex
-	closed  bool
+	db          *sql.DB
+	queries     *sqlcdb.Queries
+	config      *DBConfig
+	mu          sync.RWMutex
+	closed      bool
+	enableDBLog bool
 }
 
 // NewDBManager 创建新的数据库管理器
@@ -79,15 +81,25 @@ func NewDBManager(config *DBConfig) (*DBManager, error) {
 		return nil, fmt.Errorf("数据库连接测试失败: %w", err)
 	}
 
-	queries := sqlcdb.New(db)
+	// 初始化数据库日志
+	if err := logger.InitDBLogger(nil); err != nil {
+		log.Printf("初始化数据库日志失败: %v", err)
+	}
+
+	// 使用带日志的 DBTX 创建 queries
+	loggedDB := logger.NewLoggedDBTX(db)
+	queries := sqlcdb.New(loggedDB)
 
 	manager := &DBManager{
-		db:      db,
-		queries: queries,
-		config:  config,
+		db:          db,
+		queries:     queries,
+		config:      config,
+		enableDBLog: true,
 	}
 
 	log.Printf("数据库连接成功: %s", config.Driver)
+	logger.LogDBInfo("CONNECT", fmt.Sprintf("数据库连接成功: %s", config.Driver))
+
 	return manager, nil
 }
 
@@ -115,6 +127,12 @@ func (m *DBManager) Close() error {
 	}
 
 	m.closed = true
+
+	// 关闭数据库日志
+	if dbLogger := logger.GetDBLogger(); dbLogger != nil {
+		dbLogger.Close()
+	}
+
 	if err := m.db.Close(); err != nil {
 		return fmt.Errorf("关闭数据库连接失败: %w", err)
 	}
@@ -155,8 +173,10 @@ func DBMiddleware(manager *DBManager) gin.HandlerFunc {
 func TransactionMiddleware(manager *DBManager) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// 开始事务
+		logger.LogDBInfo("TX_BEGIN", "开始事务")
 		tx, err := manager.GetDB().BeginTx(c.Request.Context(), nil)
 		if err != nil {
+			logger.LogDBError("TX_BEGIN", "开始事务失败", err)
 			c.AbortWithStatusJSON(500, gin.H{
 				"code":    500,
 				"message": "开始事务失败",
@@ -167,11 +187,14 @@ func TransactionMiddleware(manager *DBManager) gin.HandlerFunc {
 
 		// 将事务和带事务的查询对象注入上下文
 		c.Set(TxKey, tx)
-		c.Set(QueriesKey, manager.GetQueries().WithTx(tx))
+		// 使用带日志的事务包装
+		loggedTx := logger.NewLoggedDBTX(tx)
+		c.Set(QueriesKey, sqlcdb.New(loggedTx))
 
 		// 使用 defer 确保事务正确处理
 		defer func() {
 			if r := recover(); r != nil {
+				logger.LogDBError("TX_ROLLBACK", "事务因 panic 回滚", fmt.Errorf("%v", r))
 				tx.Rollback()
 				panic(r)
 			}
@@ -182,16 +205,22 @@ func TransactionMiddleware(manager *DBManager) gin.HandlerFunc {
 		// 根据响应状态决定提交或回滚
 		if c.Writer.Status() >= 400 || len(c.Errors) > 0 {
 			if err := tx.Rollback(); err != nil {
+				logger.LogDBError("TX_ROLLBACK", "事务回滚失败", err)
 				log.Printf("事务回滚失败: %v", err)
+			} else {
+				logger.LogDBInfo("TX_ROLLBACK", "事务已回滚")
 			}
 		} else {
 			if err := tx.Commit(); err != nil {
+				logger.LogDBError("TX_COMMIT", "事务提交失败", err)
 				log.Printf("事务提交失败: %v", err)
 				c.AbortWithStatusJSON(500, gin.H{
 					"code":    500,
 					"message": "事务提交失败",
 					"error":   err.Error(),
 				})
+			} else {
+				logger.LogDBInfo("TX_COMMIT", "事务已提交")
 			}
 		}
 	}
@@ -262,13 +291,16 @@ func GetTxFromContext(c *gin.Context) (*sql.Tx, error) {
 
 // WithTransaction 在事务中执行函数
 func WithTransaction(ctx context.Context, db *sql.DB, fn func(tx *sql.Tx) error) error {
+	logger.LogDBInfo("TX_BEGIN", "开始事务")
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
+		logger.LogDBError("TX_BEGIN", "开始事务失败", err)
 		return fmt.Errorf("开始事务失败: %w", err)
 	}
 
 	defer func() {
 		if p := recover(); p != nil {
+			logger.LogDBError("TX_ROLLBACK", "事务因 panic 回滚", fmt.Errorf("%v", p))
 			tx.Rollback()
 			panic(p)
 		}
@@ -276,27 +308,34 @@ func WithTransaction(ctx context.Context, db *sql.DB, fn func(tx *sql.Tx) error)
 
 	if err := fn(tx); err != nil {
 		if rbErr := tx.Rollback(); rbErr != nil {
+			logger.LogDBError("TX_ROLLBACK", "事务回滚失败", rbErr)
 			return fmt.Errorf("执行失败: %v, 回滚失败: %w", err, rbErr)
 		}
+		logger.LogDBInfo("TX_ROLLBACK", "事务已回滚")
 		return err
 	}
 
 	if err := tx.Commit(); err != nil {
+		logger.LogDBError("TX_COMMIT", "事务提交失败", err)
 		return fmt.Errorf("提交事务失败: %w", err)
 	}
 
+	logger.LogDBInfo("TX_COMMIT", "事务已提交")
 	return nil
 }
 
 // WithTransactionOptions 带选项在事务中执行函数
 func WithTransactionOptions(ctx context.Context, db *sql.DB, opts *sql.TxOptions, fn func(tx *sql.Tx) error) error {
+	logger.LogDBInfo("TX_BEGIN", fmt.Sprintf("开始事务 (Options: %+v)", opts))
 	tx, err := db.BeginTx(ctx, opts)
 	if err != nil {
+		logger.LogDBError("TX_BEGIN", "开始事务失败", err)
 		return fmt.Errorf("开始事务失败: %w", err)
 	}
 
 	defer func() {
 		if p := recover(); p != nil {
+			logger.LogDBError("TX_ROLLBACK", "事务因 panic 回滚", fmt.Errorf("%v", p))
 			tx.Rollback()
 			panic(p)
 		}
@@ -304,15 +343,19 @@ func WithTransactionOptions(ctx context.Context, db *sql.DB, opts *sql.TxOptions
 
 	if err := fn(tx); err != nil {
 		if rbErr := tx.Rollback(); rbErr != nil {
+			logger.LogDBError("TX_ROLLBACK", "事务回滚失败", rbErr)
 			return fmt.Errorf("执行失败: %v, 回滚失败: %w", err, rbErr)
 		}
+		logger.LogDBInfo("TX_ROLLBACK", "事务已回滚")
 		return err
 	}
 
 	if err := tx.Commit(); err != nil {
+		logger.LogDBError("TX_COMMIT", "事务提交失败", err)
 		return fmt.Errorf("提交事务失败: %w", err)
 	}
 
+	logger.LogDBInfo("TX_COMMIT", "事务已提交")
 	return nil
 }
 

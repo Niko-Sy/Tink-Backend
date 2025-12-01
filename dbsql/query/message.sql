@@ -81,7 +81,7 @@ WHERE message_id = $1;
 -- 软删除消息（将内容置为系统消息提示）
 UPDATE messages 
 SET 
-    content = '该消息已被删除',
+    content = '该消息已被撤回',
     message_type = 'system_notification'
 WHERE message_id = $1
 RETURNING 

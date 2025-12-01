@@ -17,8 +17,20 @@ type JoinChatRoomRequest struct {
 }
 
 type JoinChatRoomResponse struct {
-	RoomId     string             `json:"roomId"`
-	MemberInfo MemberInfoResponse `json:"memberInfo"`
+	Chatroom   ChatroomInfoResponse `json:"chatroom"`
+	MemberInfo MemberInfoResponse   `json:"memberInfo"`
+}
+
+type ChatroomInfoResponse struct {
+	RoomId          string    `json:"roomId"`
+	Name            string    `json:"name"`
+	Description     string    `json:"description"`
+	Icon            string    `json:"icon"`
+	Type            string    `json:"type"`
+	OnlineCount     int32     `json:"onlineCount"`
+	PeopleCount     int32     `json:"peopleCount"`
+	CreatedTime     time.Time `json:"createdTime"`
+	LastMessageTime time.Time `json:"lastMessageTime"`
 }
 
 func HandleJoinRoom(c *gin.Context) {
@@ -166,7 +178,48 @@ func HandleJoinRoom(c *gin.Context) {
 		c.Error(err)
 	}
 
+	// 重新查询聊天室信息以获取更新后的成员数
+	updatedChatroom, err := queries.GetChatroomByID(c.Request.Context(), roomId)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    500,
+			"message": "查询聊天室信息失败",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	// 转换聊天室类型为字符串
+	var roomTypeStr string
+	switch updatedChatroom.RoomType {
+	case sqlcdb.ChatroomTypePublic:
+		roomTypeStr = "public"
+	case sqlcdb.ChatroomTypePrivateInviteOnly:
+		roomTypeStr = "private"
+	case sqlcdb.ChatroomTypePrivatePassword:
+		roomTypeStr = "protected"
+	default:
+		roomTypeStr = "public"
+	}
+
 	// 构建响应
+	chatroomInfo := ChatroomInfoResponse{
+		RoomId:      updatedChatroom.RoomID,
+		Name:        updatedChatroom.RoomName,
+		Description: updatedChatroom.Description.String,
+		Icon:        updatedChatroom.IconUrl.String,
+		Type:        roomTypeStr,
+		OnlineCount: updatedChatroom.OnlineCount,
+		PeopleCount: updatedChatroom.MemberCount,
+		CreatedTime: updatedChatroom.CreatedAt,
+		LastMessageTime: func() time.Time {
+			if updatedChatroom.LastActiveAt.Valid {
+				return updatedChatroom.LastActiveAt.Time
+			}
+			return updatedChatroom.CreatedAt
+		}(),
+	}
+
 	memberInfo := MemberInfoResponse{
 		MemberId: member.MemberRelID,
 		RoomId:   member.RoomID,
@@ -181,7 +234,7 @@ func HandleJoinRoom(c *gin.Context) {
 		"code":    200,
 		"message": "加入成功",
 		"data": JoinChatRoomResponse{
-			RoomId:     roomId,
+			Chatroom:   chatroomInfo,
 			MemberInfo: memberInfo,
 		},
 		"timestamp": time.Now().Format(time.RFC3339),

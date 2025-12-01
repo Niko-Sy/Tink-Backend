@@ -4,6 +4,7 @@ import (
 	"chatroombackend/api/authentic"
 	"chatroombackend/api/chatroom"
 	"chatroombackend/api/member"
+	"chatroombackend/api/messages"
 	"chatroombackend/api/user"
 	"chatroombackend/api/websocketmsg"
 	"chatroombackend/middleware"
@@ -29,6 +30,17 @@ func init() {
 	if err != nil {
 		log.Fatalf("初始化数据库失败: %v", err)
 	}
+
+	// 初始化图片上传配置
+	imageConfig := &utils.ImageConfig{
+		UploadDir:     "./uploads",
+		MaxSize:       5 * 1024 * 1024, // 5MB
+		AllowedTypes:  []string{"image/jpeg", "image/png", "image/gif", "image/webp"},
+		URLPrefix:     "/static/images",
+		BaseURL:       getEnvOrDefault("BASE_URL", "http://localhost:8080"),
+		DefaultAvatar: "https://example.com/default-avatar.jpg",
+	}
+	utils.InitImageUploader(imageConfig)
 }
 
 func main() {
@@ -43,6 +55,9 @@ func main() {
 	go handleShutdown()
 
 	router := gin.Default()
+
+	// CORS 中间件
+	router.Use(middleware.CORSMiddleware())
 
 	// 使用数据库中间件
 	router.Use(middleware.DBMiddleware(dbManager))
@@ -88,11 +103,18 @@ func main() {
 				chatroomAuth.POST("/:roomid/delete", chatroom.HandleDeleteRoom)
 				// 聊天室图片上传
 				chatroomAuth.POST("/:roomid/uploadimage", utils.HandleUploadChatImage)
+
+				// 消息相关接口
+				chatroomAuth.POST("/:roomid/messages", messages.HandleSendMessage)
+				chatroomAuth.GET("/:roomid/messages", messages.HandleGetMessageHistory)
+				chatroomAuth.POST("/:roomid/messages/:messageid/edit", messages.HandleEditMessage)
+				chatroomAuth.POST("/:roomid/messages/:messageid/delete", messages.HandleDeleteMessage)
+
 				membersgroup := chatroomAuth.Group("/:roomid/members")
 				{
 					membersgroup.GET("/memberlist", member.HandleListRoomMembers)
 					membersgroup.GET("/search", member.HandleSearchRoomMembers)
-					// membersgroup.GET("/:userid/info", member.HandleGetRoomMemberInfo)
+					membersgroup.GET("/:userid/info", member.HandleGetRoomMemberInfo)
 					membersgroup.POST("/kick", member.HandleKickRoomMember)
 					membersgroup.POST("/mute", member.HandleMuteRoomMember)
 					membersgroup.POST("/unmute", member.HandleUnmuteRoomMember)
@@ -125,7 +147,7 @@ func main() {
 		// }
 	}
 
-	err := router.Run(":8080")
+	err := router.Run("0.0.0.0:8080")
 	if err != nil {
 		log.Fatalf("启动服务器失败: %v", err)
 	}
