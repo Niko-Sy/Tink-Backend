@@ -37,7 +37,7 @@ func init() {
 		MaxSize:       5 * 1024 * 1024, // 5MB
 		AllowedTypes:  []string{"image/jpeg", "image/png", "image/gif", "image/webp"},
 		URLPrefix:     "/static/images",
-		BaseURL:       getEnvOrDefault("BASE_URL", "http://localhost:8080"),
+		BaseURL:       getEnvOrDefault("BASE_URL", "http://10.84.250.156:8080"),
 		DefaultAvatar: "https://example.com/default-avatar.jpg",
 	}
 	utils.InitImageUploader(imageConfig)

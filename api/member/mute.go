@@ -1,9 +1,11 @@
 package member
 
 import (
+	"chatroombackend/api/websocketmsg"
 	sqlcdb "chatroombackend/db"
 	"chatroombackend/middleware"
 	"database/sql"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -108,6 +110,43 @@ func HandleMuteRoomMember(c *gin.Context) {
 	var muteUntil *time.Time
 	if expires.Valid {
 		muteUntil = &expires.Time
+	}
+
+	// WebSocket 通知: 通知被禁言用户
+	var duration time.Duration
+	if req.Duration < 0 {
+		duration = 0 // 永久禁言
+	} else {
+		duration = time.Duration(req.Duration) * time.Second
+	}
+	websocketmsg.NotifyUserMuted(member.UserID, roomID, duration)
+
+	// 获取被禁言用户的昵称用于系统消息
+	mutedUser, err := queries.GetUserByID(c.Request.Context(), member.UserID)
+	var displayName string
+	if err == nil && mutedUser.Nickname.Valid && mutedUser.Nickname.String != "" {
+		displayName = mutedUser.Nickname.String
+	} else if err == nil {
+		displayName = mutedUser.Username
+	} else {
+		displayName = "用户"
+	}
+
+	// WebSocket 通知: 向聊天室广播禁言消息
+	var systemMsg string
+	if req.Duration < 0 {
+		systemMsg = fmt.Sprintf("%s已被永久禁言", displayName)
+	} else if req.Duration > 0 {
+		// 转换为分钟显示（如果大于等于60秒）
+		if req.Duration >= 60 {
+			minutes := req.Duration / 60
+			systemMsg = fmt.Sprintf("%s已被禁言%d分钟", displayName, minutes)
+		} else {
+			systemMsg = fmt.Sprintf("%s已被禁言%d秒", displayName, req.Duration)
+		}
+	}
+	if systemMsg != "" {
+		_ = websocketmsg.SendSystemMessage(roomID, systemMsg, member.MemberRelID)
 	}
 
 	c.JSON(http.StatusOK, gin.H{"code": 200, "message": "禁言成功", "data": gin.H{"muteUntil": muteUntil}})

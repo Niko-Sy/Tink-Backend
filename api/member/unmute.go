@@ -1,8 +1,10 @@
 package member
 
 import (
+	"chatroombackend/api/websocketmsg"
 	sqlcdb "chatroombackend/db"
 	"chatroombackend/middleware"
+	"fmt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -103,6 +105,23 @@ func HandleUnmuteRoomMember(c *gin.Context) {
 	if err := queries.DeactivateMuteRecord(c.Request.Context(), member.MemberRelID); err != nil {
 		// 记录失败不阻断流程
 	}
+
+	// WebSocket 通知: 通知被解禁用户
+	websocketmsg.NotifyUserUnmuted(member.UserID, roomID)
+
+	// 获取被解禁用户的昵称用于系统消息
+	unmutedUser, err := queries.GetUserByID(c.Request.Context(), member.UserID)
+	var displayName string
+	if err == nil && unmutedUser.Nickname.Valid && unmutedUser.Nickname.String != "" {
+		displayName = unmutedUser.Nickname.String
+	} else if err == nil {
+		displayName = unmutedUser.Username
+	} else {
+		displayName = "用户"
+	}
+
+	// WebSocket 通知: 向聊天室广播解禁消息
+	_ = websocketmsg.SendSystemMessage(roomID, fmt.Sprintf("%s已被解除禁言", displayName), member.MemberRelID)
 
 	c.JSON(http.StatusOK, gin.H{
 		"code":    200,

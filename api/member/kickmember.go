@@ -1,8 +1,10 @@
 package member
 
 import (
+	"chatroombackend/api/websocketmsg"
 	sqlcdb "chatroombackend/db"
 	"chatroombackend/middleware"
+	"fmt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -71,6 +73,22 @@ func HandleKickRoomMember(c *gin.Context) {
 
 	// 同步成员计数（减少）
 	_ = queries.DecrementChatroomMemberCount(c.Request.Context(), roomID)
+
+	// WebSocket 通知: 通知被踢出用户
+	websocketmsg.NotifyUserKicked(member.UserID, roomID, req.Reason)
+
+	// WebSocket 通知: 向聊天室广播踢出消息
+	// 获取被踢出用户的昵称用于系统消息
+	kickedUser, err := queries.GetUserByID(c.Request.Context(), member.UserID)
+	var displayName string
+	if err == nil && kickedUser.Nickname.Valid && kickedUser.Nickname.String != "" {
+		displayName = kickedUser.Nickname.String
+	} else if err == nil {
+		displayName = kickedUser.Username
+	} else {
+		displayName = "用户"
+	}
+	_ = websocketmsg.SendSystemMessage(roomID, fmt.Sprintf("%s已被移出聊天室", displayName))
 
 	c.JSON(http.StatusOK, gin.H{"code": 200, "message": "踢出成功"})
 }

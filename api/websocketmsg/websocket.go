@@ -729,7 +729,8 @@ func BroadcastToRoom(roomID string, msg WSMessage) {
 }
 
 // SendSystemMessage 发送系统消息到指定房间
-func SendSystemMessage(roomID string, content string) error {
+// memberID: 可选，相关成员的member_rel_id（如禁言/解禁通知）
+func SendSystemMessage(roomID string, content string, memberID ...string) error {
 	if queries == nil {
 		return fmt.Errorf("database not initialized")
 	}
@@ -763,11 +764,18 @@ func SendSystemMessage(roomID string, content string) error {
 	}
 
 	outMsg := WSMessage{Type: "message", Action: "new"}
+	// 如果提供了 memberID，添加到消息中
+	if len(memberID) > 0 && memberID[0] != "" {
+		out["memberId"] = memberID[0]
+	}
+
 	b, _ := json.Marshal(out)
 	outMsg.Data = b
 
 	// 广播到房间
+	logger.Info("WebSocket", fmt.Sprintf("Broadcasting system message %s to room %s", m.MessageID, roomID))
 	hub.broadcastRoom(roomID, outMsg)
+
 	return nil
 }
 
@@ -787,7 +795,7 @@ func NotifyUserKicked(userID, roomID, reason string) {
 	msg := WSMessage{
 		Type:   "room_member",
 		Action: "kicked",
-		Data:   json.RawMessage(fmt.Sprintf(`{"roomId":"%s","reason":"%s","timestamp":"%s"}`, roomID, reason, time.Now().UTC().Format(time.RFC3339))),
+		Data:   json.RawMessage(fmt.Sprintf(`{"userId":"%s","roomId":"%s","reason":"%s","timestamp":"%s"}`, userID, roomID, reason, time.Now().UTC().Format(time.RFC3339))),
 	}
 	logger.Info("WebSocket", fmt.Sprintf("Notifying user %s kicked from room %s", userID, roomID))
 	SendToUser(userID, msg)
@@ -806,11 +814,22 @@ func NotifyUserKicked(userID, roomID, reason string) {
 }
 
 // NotifyUserMuted 通知用户被禁言
+// duration: 禁言时长，0 或负数表示永久禁言
 func NotifyUserMuted(userID, roomID string, duration time.Duration) {
+	var data string
+	if duration <= 0 {
+		// 永久禁言
+		data = fmt.Sprintf(`{"roomId":"%s","duration":-1}`, roomID)
+	} else {
+		// 定时禁言：duration 为秒数，muteUntil 为结束时间
+		durationSeconds := int64(duration.Seconds())
+		muteUntil := time.Now().Add(duration).UTC().Format(time.RFC3339)
+		data = fmt.Sprintf(`{"roomId":"%s","duration":%d,"muteUntil":"%s"}`, roomID, durationSeconds, muteUntil)
+	}
 	msg := WSMessage{
-		Type:   "mute",
+		Type:   "notification",
 		Action: "muted",
-		Data:   json.RawMessage(fmt.Sprintf(`{"roomId":"%s","duration":"%s","timestamp":"%s"}`, roomID, duration.String(), time.Now().UTC().Format(time.RFC3339))),
+		Data:   json.RawMessage(data),
 	}
 	logger.Info("WebSocket", fmt.Sprintf("Notifying user %s muted in room %s for %s", userID, roomID, duration))
 	SendToUser(userID, msg)
@@ -819,9 +838,9 @@ func NotifyUserMuted(userID, roomID string, duration time.Duration) {
 // NotifyUserUnmuted 通知用户解除禁言
 func NotifyUserUnmuted(userID, roomID string) {
 	msg := WSMessage{
-		Type:   "mute",
+		Type:   "notification",
 		Action: "unmuted",
-		Data:   json.RawMessage(fmt.Sprintf(`{"roomId":"%s","timestamp":"%s"}`, roomID, time.Now().UTC().Format(time.RFC3339))),
+		Data:   json.RawMessage(fmt.Sprintf(`{"roomId":"%s"}`, roomID)),
 	}
 	logger.Info("WebSocket", fmt.Sprintf("Notifying user %s unmuted in room %s", userID, roomID))
 	SendToUser(userID, msg)
