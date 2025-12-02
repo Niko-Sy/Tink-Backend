@@ -81,11 +81,14 @@ func main() {
 		{
 			authGroup.POST("/login", authentic.HandleLogin)
 			authGroup.POST("/register", authentic.HandleRegister)
-			authGroup.GET("/logout", authentic.HandleLogout)
-			authGroup.GET("/refresh", authentic.HandleRefresh)
-			authGroup.POST("/changepwd", authentic.HandleChangePassword)
-			// authGroup.GET("/userinfo", authentic.HandleGetUserInfo)
-			// authGroup.POST("/updateuserinfo", authentic.HandleUpdateUserInfo)
+			authTokenGroup := authGroup.Group("")
+			authTokenGroup.Use(middleware.JWTAuthMiddleware())
+			{
+				authGroup.GET("/logout", authentic.HandleLogout)
+				authGroup.GET("/refresh", authentic.HandleRefresh)
+				authGroup.POST("/changepwd", authentic.HandleChangePassword)
+			}
+
 		}
 		chatroomGroup := apiV1.Group("/chatroom")
 		{
