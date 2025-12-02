@@ -84,9 +84,9 @@ func main() {
 			authTokenGroup := authGroup.Group("")
 			authTokenGroup.Use(middleware.JWTAuthMiddleware())
 			{
-				authGroup.GET("/logout", authentic.HandleLogout)
-				authGroup.GET("/refresh", authentic.HandleRefresh)
-				authGroup.POST("/changepwd", authentic.HandleChangePassword)
+				authTokenGroup.GET("/logout", authentic.HandleLogout)
+				authTokenGroup.GET("/refresh", authentic.HandleRefresh)
+				authTokenGroup.POST("/changepwd", authentic.HandleChangePassword)
 			}
 
 		}
