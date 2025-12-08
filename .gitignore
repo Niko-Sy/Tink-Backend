@@ -11,6 +11,7 @@ logs
 #build files
 *.exe
 *.dll
+build
 myapp-linux
 
 # upload
