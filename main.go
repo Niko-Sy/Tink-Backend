@@ -7,40 +7,84 @@ import (
 	"chatroombackend/api/messages"
 	"chatroombackend/api/user"
 	"chatroombackend/api/websocketmsg"
+	"chatroombackend/config"
+	"chatroombackend/logger"
 	"chatroombackend/middleware"
 	"chatroombackend/utils"
 	"log"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	_ "github.com/lib/pq" // PostgreSQL 驱动
 )
 
 var dbManager *middleware.DBManager
+var appConfig *config.Config
 
 func init() {
-	// 初始化数据库配置
-	config := middleware.DefaultDBConfig()
-	config.DSN = getEnvOrDefault("DATABASE_URL", "postgres://postgres:123456@localhost:5432/chatroom?sslmode=disable")
-
+	// 加载配置文件
 	var err error
-	dbManager, err = middleware.NewDBManager(config)
+	configPath := getEnvOrDefault("CONFIG_PATH", "./config.yaml")
+	appConfig, err = config.LoadConfig(configPath)
+	if err != nil {
+		log.Fatalf("加载配置文件失败: %v", err)
+	}
+
+	// 初始化应用日志
+	loggerConfig := &logger.AppLoggerConfig{
+		LogDir:        appConfig.Logger.LogDir,
+		LogLevel:      parseLogLevel(appConfig.Logger.LogLevel),
+		EnableConsole: appConfig.Logger.EnableConsole,
+		EnableFile:    appConfig.Logger.EnableFile,
+		MaxAge:        appConfig.Logger.MaxAge,
+	}
+	if err := logger.InitAppLogger(loggerConfig); err != nil {
+		log.Fatalf("初始化日志失败: %v", err)
+	}
+
+	// 初始化数据库配置
+	dbConfig := middleware.DefaultDBConfig()
+	dbConfig.DSN = appConfig.GetDatabaseURL()
+	dbConfig.MaxOpenConns = appConfig.Database.MaxOpenConns
+	dbConfig.MaxIdleConns = appConfig.Database.MaxIdleConns
+	dbConfig.ConnMaxLifetime = time.Duration(appConfig.Database.ConnMaxLifetime) * time.Second
+
+	dbManager, err = middleware.NewDBManager(dbConfig)
 	if err != nil {
 		log.Fatalf("初始化数据库失败: %v", err)
 	}
 
 	// 初始化图片上传配置
 	imageConfig := &utils.ImageConfig{
-		UploadDir:     "./uploads",
-		MaxSize:       5 * 1024 * 1024, // 5MB
-		AllowedTypes:  []string{"image/jpeg", "image/png", "image/gif", "image/webp"},
-		URLPrefix:     "/static/images",
-		BaseURL:       getEnvOrDefault("BASE_URL", "http://10.84.250.156:8080"),
-		DefaultAvatar: "https://example.com/default-avatar.jpg",
+		UploadDir:     appConfig.Upload.UploadDir,
+		MaxSize:       appConfig.Upload.MaxSize,
+		AllowedTypes:  appConfig.Upload.AllowedTypes,
+		URLPrefix:     appConfig.Upload.URLPrefix,
+		BaseURL:       appConfig.Server.BaseURL,
+		DefaultAvatar: appConfig.Upload.DefaultAvatar,
 	}
 	utils.InitImageUploader(imageConfig)
+
+	logger.Info("System", "应用初始化完成")
+}
+
+// parseLogLevel 解析日志级别
+func parseLogLevel(level string) logger.LogLevel {
+	switch level {
+	case "debug":
+		return logger.LogLevelDebug
+	case "info":
+		return logger.LogLevelInfo
+	case "warn":
+		return logger.LogLevelWarn
+	case "error":
+		return logger.LogLevelError
+	default:
+		return logger.LogLevelInfo
+	}
 }
 
 func main() {
@@ -150,7 +194,7 @@ func main() {
 		// }
 	}
 
-	err := router.Run("0.0.0.0:8080")
+	err := router.Run(appConfig.GetServerAddress())
 	if err != nil {
 		log.Fatalf("启动服务器失败: %v", err)
 	}

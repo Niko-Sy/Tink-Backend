@@ -31,8 +31,8 @@ var DefaultImageConfig = ImageConfig{
 	MaxSize:       5 * 1024 * 1024, // 5MB
 	AllowedTypes:  []string{"image/jpeg", "image/png", "image/gif", "image/webp"},
 	URLPrefix:     "/static/images",
-	BaseURL:       "http://localhost:8080",
-	DefaultAvatar: "https://example.com/default-avatar.jpg",
+	BaseURL:       "http://10.27.227.190:8080",
+	DefaultAvatar: "https://www.tastywhut.site/pic/avatar/default-avatar.jpg",
 }
 
 // ImageUploader 图片上传器

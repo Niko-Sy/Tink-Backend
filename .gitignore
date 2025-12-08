@@ -1,0 +1,17 @@
+#log ignore
+*log
+logs
+
+# Temporary files
+*.tmp
+*.temp
+.vscode
+.idea
+
+#build files
+*.exe
+*.dll
+myapp-linux
+
+# upload
+uploads
