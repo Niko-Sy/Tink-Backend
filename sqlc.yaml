@@ -1,13 +1,16 @@
 version: "2"
 sql:
+  # 合并所有查询到一个配置中，避免 prepared statements 冲突
   - engine: "postgresql"
-    queries: "./dbsql/query/"
+    queries: 
+      - "./dbsql/query/"
+      - "./dbsql/extension/"
     schema: "./dbsql/migration/"
     database:
-      uri: "postgresql://postgres:123456@localhost:5432/chatroom?sslmode=disable"
+      uri: "postgres://postgres:sy20050401@120.27.227.190:5432/chatroom?sslmode=disable"
     gen:
       go:
-        package: "sqlcdb"
+        package: "db"
         out: "./db"
         sql_package: "database/sql"
         emit_json_tags: true

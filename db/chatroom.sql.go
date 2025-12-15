@@ -3,7 +3,7 @@
 //   sqlc v1.30.0
 // source: chatroom.sql
 
-package sqlcdb
+package db
 
 import (
 	"context"

@@ -3,7 +3,7 @@
 //   sqlc v1.30.0
 // source: mute_record.sql
 
-package sqlcdb
+package db
 
 import (
 	"context"

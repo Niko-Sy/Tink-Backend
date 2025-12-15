@@ -2,7 +2,7 @@
 // versions:
 //   sqlc v1.30.0
 
-package sqlcdb
+package db
 
 import (
 	"database/sql"
@@ -97,6 +97,92 @@ func (ns NullChatroomType) Value() (driver.Value, error) {
 		return nil, nil
 	}
 	return string(ns.ChatroomType), nil
+}
+
+type FeedbackType string
+
+const (
+	FeedbackTypeBug     FeedbackType = "bug"
+	FeedbackTypeFeature FeedbackType = "feature"
+	FeedbackTypeOther   FeedbackType = "other"
+)
+
+func (e *FeedbackType) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = FeedbackType(s)
+	case string:
+		*e = FeedbackType(s)
+	default:
+		return fmt.Errorf("unsupported scan type for FeedbackType: %T", src)
+	}
+	return nil
+}
+
+type NullFeedbackType struct {
+	FeedbackType FeedbackType `json:"feedback_type"`
+	Valid        bool         `json:"valid"` // Valid is true if FeedbackType is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullFeedbackType) Scan(value interface{}) error {
+	if value == nil {
+		ns.FeedbackType, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.FeedbackType.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullFeedbackType) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.FeedbackType), nil
+}
+
+type FriendRequestStatus string
+
+const (
+	FriendRequestStatusPending  FriendRequestStatus = "pending"
+	FriendRequestStatusAccepted FriendRequestStatus = "accepted"
+	FriendRequestStatusRejected FriendRequestStatus = "rejected"
+)
+
+func (e *FriendRequestStatus) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = FriendRequestStatus(s)
+	case string:
+		*e = FriendRequestStatus(s)
+	default:
+		return fmt.Errorf("unsupported scan type for FriendRequestStatus: %T", src)
+	}
+	return nil
+}
+
+type NullFriendRequestStatus struct {
+	FriendRequestStatus FriendRequestStatus `json:"friend_request_status"`
+	Valid               bool                `json:"valid"` // Valid is true if FriendRequestStatus is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullFriendRequestStatus) Scan(value interface{}) error {
+	if value == nil {
+		ns.FriendRequestStatus, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.FriendRequestStatus.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullFriendRequestStatus) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.FriendRequestStatus), nil
 }
 
 type MemberMuteStatus string
@@ -273,6 +359,221 @@ func (ns NullMessageType) Value() (driver.Value, error) {
 	return string(ns.MessageType), nil
 }
 
+type NotificationType string
+
+const (
+	NotificationTypeFriend   NotificationType = "friend"
+	NotificationTypeChatroom NotificationType = "chatroom"
+	NotificationTypeSystem   NotificationType = "system"
+)
+
+func (e *NotificationType) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = NotificationType(s)
+	case string:
+		*e = NotificationType(s)
+	default:
+		return fmt.Errorf("unsupported scan type for NotificationType: %T", src)
+	}
+	return nil
+}
+
+type NullNotificationType struct {
+	NotificationType NotificationType `json:"notification_type"`
+	Valid            bool             `json:"valid"` // Valid is true if NotificationType is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullNotificationType) Scan(value interface{}) error {
+	if value == nil {
+		ns.NotificationType, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.NotificationType.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullNotificationType) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.NotificationType), nil
+}
+
+type ReportReason string
+
+const (
+	ReportReasonSpam          ReportReason = "spam"
+	ReportReasonHarassment    ReportReason = "harassment"
+	ReportReasonInappropriate ReportReason = "inappropriate"
+	ReportReasonOther         ReportReason = "other"
+)
+
+func (e *ReportReason) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = ReportReason(s)
+	case string:
+		*e = ReportReason(s)
+	default:
+		return fmt.Errorf("unsupported scan type for ReportReason: %T", src)
+	}
+	return nil
+}
+
+type NullReportReason struct {
+	ReportReason ReportReason `json:"report_reason"`
+	Valid        bool         `json:"valid"` // Valid is true if ReportReason is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullReportReason) Scan(value interface{}) error {
+	if value == nil {
+		ns.ReportReason, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.ReportReason.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullReportReason) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.ReportReason), nil
+}
+
+type ReportStatus string
+
+const (
+	ReportStatusPending  ReportStatus = "pending"
+	ReportStatusResolved ReportStatus = "resolved"
+	ReportStatusRejected ReportStatus = "rejected"
+)
+
+func (e *ReportStatus) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = ReportStatus(s)
+	case string:
+		*e = ReportStatus(s)
+	default:
+		return fmt.Errorf("unsupported scan type for ReportStatus: %T", src)
+	}
+	return nil
+}
+
+type NullReportStatus struct {
+	ReportStatus ReportStatus `json:"report_status"`
+	Valid        bool         `json:"valid"` // Valid is true if ReportStatus is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullReportStatus) Scan(value interface{}) error {
+	if value == nil {
+		ns.ReportStatus, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.ReportStatus.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullReportStatus) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.ReportStatus), nil
+}
+
+type ReportType string
+
+const (
+	ReportTypeUser    ReportType = "user"
+	ReportTypeMessage ReportType = "message"
+)
+
+func (e *ReportType) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = ReportType(s)
+	case string:
+		*e = ReportType(s)
+	default:
+		return fmt.Errorf("unsupported scan type for ReportType: %T", src)
+	}
+	return nil
+}
+
+type NullReportType struct {
+	ReportType ReportType `json:"report_type"`
+	Valid      bool       `json:"valid"` // Valid is true if ReportType is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullReportType) Scan(value interface{}) error {
+	if value == nil {
+		ns.ReportType, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.ReportType.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullReportType) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.ReportType), nil
+}
+
+type UploadedFileType string
+
+const (
+	UploadedFileTypeAvatar    UploadedFileType = "avatar"
+	UploadedFileTypeChatImage UploadedFileType = "chat_image"
+	UploadedFileTypeFile      UploadedFileType = "file"
+)
+
+func (e *UploadedFileType) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = UploadedFileType(s)
+	case string:
+		*e = UploadedFileType(s)
+	default:
+		return fmt.Errorf("unsupported scan type for UploadedFileType: %T", src)
+	}
+	return nil
+}
+
+type NullUploadedFileType struct {
+	UploadedFileType UploadedFileType `json:"uploaded_file_type"`
+	Valid            bool             `json:"valid"` // Valid is true if UploadedFileType is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullUploadedFileType) Scan(value interface{}) error {
+	if value == nil {
+		ns.UploadedFileType, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.UploadedFileType.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullUploadedFileType) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.UploadedFileType), nil
+}
+
 type UserAccountStatus string
 
 const (
@@ -442,6 +743,34 @@ type ChatroomMember struct {
 	IsActive      bool             `json:"is_active"`
 }
 
+type Feedback struct {
+	FeedbackID   string         `json:"feedback_id"`
+	UserID       sql.NullString `json:"user_id"`
+	Type         FeedbackType   `json:"type"`
+	Title        string         `json:"title"`
+	Content      string         `json:"content"`
+	ContactEmail sql.NullString `json:"contact_email"`
+	SubmittedAt  time.Time      `json:"submitted_at"`
+	Status       sql.NullString `json:"status"`
+}
+
+type Friend struct {
+	RelationID    string    `json:"relation_id"`
+	UserID1       string    `json:"user_id_1"`
+	UserID2       string    `json:"user_id_2"`
+	EstablishedAt time.Time `json:"established_at"`
+}
+
+type FriendRequest struct {
+	RequestID  string              `json:"request_id"`
+	FromUserID string              `json:"from_user_id"`
+	ToUserID   string              `json:"to_user_id"`
+	Message    sql.NullString      `json:"message"`
+	Status     FriendRequestStatus `json:"status"`
+	Createtime time.Time           `json:"createtime"`
+	HandledAt  sql.NullTime        `json:"handled_at"`
+}
+
 type GlobalMuteRecord struct {
 	GlobalMuteID string         `json:"global_mute_id"`
 	MutedUserID  string         `json:"muted_user_id"`
@@ -472,6 +801,44 @@ type MuteRecord struct {
 	AdminID      sql.NullString `json:"admin_id"`
 }
 
+type Notification struct {
+	NotificationID string                `json:"notification_id"`
+	UserID         string                `json:"user_id"`
+	Type           NotificationType      `json:"type"`
+	Title          string                `json:"title"`
+	Content        string                `json:"content"`
+	Data           pqtype.NullRawMessage `json:"data"`
+	IsRead         bool                  `json:"is_read"`
+	CreatedAt      time.Time             `json:"created_at"`
+}
+
+type Report struct {
+	ReportID    string         `json:"report_id"`
+	ReporterID  string         `json:"reporter_id"`
+	TargetType  ReportType     `json:"target_type"`
+	TargetID    string         `json:"target_id"`
+	RoomID      sql.NullString `json:"room_id"`
+	Reason      ReportReason   `json:"reason"`
+	Description sql.NullString `json:"description"`
+	Status      ReportStatus   `json:"status"`
+	CreatedAt   time.Time      `json:"created_at"`
+	ReslovedAt  sql.NullTime   `json:"resloved_at"`
+	ResolvedBy  sql.NullString `json:"resolved_by"`
+}
+
+type UploadedFile struct {
+	FileID        string           `json:"file_id"`
+	UploaderID    string           `json:"uploader_id"`
+	FileName      string           `json:"file_name"`
+	FilePath      string           `json:"file_path"`
+	FileSize      int64            `json:"file_size"`
+	MimeType      string           `json:"mime_type"`
+	UploadContext UploadedFileType `json:"upload_context"`
+	RelatedRoomID sql.NullString   `json:"related_room_id"`
+	UploadedAt    time.Time        `json:"uploaded_at"`
+	IsDeleted     bool             `json:"is_deleted"`
+}
+
 type User struct {
 	UserID         string                `json:"user_id"`
 	Username       string                `json:"username"`
@@ -486,4 +853,17 @@ type User struct {
 	SystemRole     NullUserSystemRole    `json:"system_role"`
 	RegisteredAt   time.Time             `json:"registered_at"`
 	LastLoginAt    sql.NullTime          `json:"last_login_at"`
+}
+
+type UserSetting struct {
+	UserID                    string    `json:"user_id"`
+	EnableFriendRequest       bool      `json:"enable_friend_request"`
+	EnableChatroomMessages    bool      `json:"enable_chatroom_messages"`
+	EnableSystemNotice        bool      `json:"enable_system_notice"`
+	EnableSound               bool      `json:"enable_sound"`
+	EnableDesktopNotification bool      `json:"enable_desktop_notification"`
+	AllowSearchByPhone        bool      `json:"allow_search_by_phone"`
+	AllowSearchByEmail        bool      `json:"allow_search_by_email"`
+	ShowOnlineStatus          bool      `json:"show_online_status"`
+	UpdateAt                  time.Time `json:"update_at"`
 }

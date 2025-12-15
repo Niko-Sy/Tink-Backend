@@ -2,7 +2,7 @@
 // versions:
 //   sqlc v1.30.0
 
-package sqlcdb
+package db
 
 import (
 	"context"
@@ -11,6 +11,8 @@ import (
 )
 
 type Querier interface {
+	// 接受好友请求 POST /friends/request/:requestId/handle
+	AcceptFriendRequest(ctx context.Context, arg AcceptFriendRequestParams) (FriendRequest, error)
 	// 激活用户账号
 	ActivateUser(ctx context.Context, userID string) error
 	// 归档聊天室
@@ -20,6 +22,10 @@ type Querier interface {
 	// =============================================
 	// 检查用户是否可以在聊天室发送消息（综合检查全局禁言和聊天室禁言）
 	CanUserSendMessageInRoom(ctx context.Context, arg CanUserSendMessageInRoomParams) (sql.NullBool, error)
+	// 取消好友请求
+	CancelFriendRequest(ctx context.Context, arg CancelFriendRequestParams) error
+	// 检查是否存在重复举报
+	CheckDuplicateReport(ctx context.Context, arg CheckDuplicateReportParams) (bool, error)
 	// 检查邮箱是否已存在
 	CheckEmailExists(ctx context.Context, email sql.NullString) (bool, error)
 	// 检查手机号是否已存在
@@ -41,21 +47,71 @@ type Querier interface {
 	CountAdminLogsByType(ctx context.Context, operationType string) (int64, error)
 	// 统计聊天室成员数量
 	CountChatroomMembers(ctx context.Context, roomID string) (int64, error)
+	// 统计各状态反馈数量
+	CountFeedbacksByStatus(ctx context.Context, status sql.NullString) (int64, error)
+	// 统计各类型反馈数量
+	CountFeedbacksByType(ctx context.Context, type_ FeedbackType) (int64, error)
+	// =============================================
+	// 4. 反馈统计 (Feedback Statistics)
+	// =============================================
+	// 统计用户提交的反馈数量
+	CountFeedbacksByUser(ctx context.Context, userID sql.NullString) (int64, error)
+	// 统计各类型文件数量
+	CountFilesByContext(ctx context.Context, uploadContext UploadedFileType) (int64, error)
+	// 统计聊天室的文件数量
+	CountFilesByRoom(ctx context.Context, relatedRoomID sql.NullString) (int64, error)
+	// =============================================
+	// 4. 文件统计 (File Statistics)
+	// =============================================
+	// 统计用户上传的文件数量
+	CountFilesByUploader(ctx context.Context, uploaderID string) (int64, error)
+	// 统计好友数量
+	CountFriends(ctx context.Context, userID1 string) (int64, error)
 	// =============================================
 	// 3. 消息统计与未读 (Message Statistics)
 	// =============================================
 	// 统计聊天室消息数量
 	CountMessagesInRoom(ctx context.Context, roomID string) (int64, error)
+	// 统计新反馈数量
+	CountNewFeedbacks(ctx context.Context) (int64, error)
 	// 统计聊天室在线成员数量
 	CountOnlineChatroomMembers(ctx context.Context, roomID string) (int64, error)
+	// 统计在线好友数量
+	CountOnlineFriends(ctx context.Context, userID1 string) (int64, error)
 	// 统计在线用户数
 	CountOnlineUsers(ctx context.Context) (int64, error)
+	// 统计待处理的收到的好友请求数量
+	CountPendingReceivedRequests(ctx context.Context, toUserID string) (int64, error)
+	// 统计待处理举报数量
+	CountPendingReports(ctx context.Context) (int64, error)
+	// 统计收到的好友请求总数（按状态）
+	CountReceivedFriendRequests(ctx context.Context, arg CountReceivedFriendRequestsParams) (int64, error)
+	// 统计针对特定目标的举报数量
+	CountReportsAgainstTarget(ctx context.Context, arg CountReportsAgainstTargetParams) (int64, error)
+	// =============================================
+	// 4. 举报统计 (Report Statistics)
+	// =============================================
+	// 统计用户提交的举报数量
+	CountReportsByReporter(ctx context.Context, reporterID string) (int64, error)
+	// 统计各状态举报数量
+	CountReportsByStatus(ctx context.Context, status ReportStatus) (int64, error)
 	// 统计搜索结果数量
 	CountSearchChatroomMembers(ctx context.Context, arg CountSearchChatroomMembersParams) (int64, error)
 	// 搜索用户计数
 	CountSearchUsers(ctx context.Context, dollar_1 sql.NullString) (int64, error)
+	// 统计发送的好友请求总数（按状态）
+	CountSentFriendRequests(ctx context.Context, arg CountSentFriendRequestsParams) (int64, error)
+	// 统计未读通知数量
+	CountUnreadNotifications(ctx context.Context, userID string) (int64, error)
+	// 按类型统计未读通知数量
+	CountUnreadNotificationsByType(ctx context.Context, arg CountUnreadNotificationsByTypeParams) (int64, error)
 	// 统计用户加入的聊天室数量
 	CountUserChatrooms(ctx context.Context, userID string) (int64, error)
+	// =============================================
+	// 4. 通知统计 (Notification Statistics)
+	// =============================================
+	// 统计用户通知总数
+	CountUserNotifications(ctx context.Context, userID string) (int64, error)
 	// =============================================
 	// 管理操作日志相关SQL查询 (Admin Log Queries)
 	// 对应API: 系统管理接口
@@ -65,8 +121,16 @@ type Querier interface {
 	// =============================================
 	// 创建管理操作日志
 	CreateAdminLog(ctx context.Context, arg CreateAdminLogParams) (AdminLog, error)
+	// 创建匿名反馈（不需要登录）
+	CreateAnonymousFeedback(ctx context.Context, arg CreateAnonymousFeedbackParams) (Feedback, error)
+	// 创建头像文件记录
+	CreateAvatarRecord(ctx context.Context, arg CreateAvatarRecordParams) (UploadedFile, error)
 	// 创建封禁账号操作日志
 	CreateBanLog(ctx context.Context, arg CreateBanLogParams) (AdminLog, error)
+	// 创建Bug报告
+	CreateBugReport(ctx context.Context, arg CreateBugReportParams) (Feedback, error)
+	// 创建聊天图片记录
+	CreateChatImageRecord(ctx context.Context, arg CreateChatImageRecordParams) (UploadedFile, error)
 	// =============================================
 	// 聊天室相关SQL查询 (Chatroom Queries)
 	// 对应API: 聊天室管理接口 + 聊天室成员管理接口
@@ -76,8 +140,94 @@ type Querier interface {
 	// =============================================
 	// 创建聊天室 POST /chatrooms
 	CreateChatroom(ctx context.Context, arg CreateChatroomParams) (Chatroom, error)
+	// 创建聊天室相关通知
+	CreateChatroomNotification(ctx context.Context, arg CreateChatroomNotificationParams) (Notification, error)
 	// 创建删除消息操作日志
 	CreateDeleteMessageLog(ctx context.Context, arg CreateDeleteMessageLogParams) (AdminLog, error)
+	// 创建功能建议
+	CreateFeatureRequest(ctx context.Context, arg CreateFeatureRequestParams) (Feedback, error)
+	// =============================================
+	// 反馈建议相关SQL查询 (Feedback Queries)
+	// 对应API: 反馈系统接口
+	// 注意: 对应 migration/000002_first_newfunction.up.sql 中的表结构
+	// =============================================
+	// =============================================
+	// 表结构说明 (已在migration中创建)
+	// =============================================
+	// feedbacks: 反馈表
+	//   - feedback_id (varchar 12, PK, 格式: FB00000000001)
+	//   - user_id (varchar 10, FK -> users, 可选)
+	//   - type (feedback_type ENUM: bug/feature/other)
+	//   - title (varchar 255)
+	//   - content (TEXT)
+	//   - contact_email (varchar 255, 可选)
+	//   - submitted_at (TIMESTAMPTZ)
+	//   - status (varchar 20, 默认 'new')
+	// =============================================
+	// 1. 反馈创建 (Feedback Creation)
+	// =============================================
+	// 创建反馈 POST /feedback
+	CreateFeedback(ctx context.Context, arg CreateFeedbackParams) (Feedback, error)
+	// =============================================
+	// 文件上传管理相关SQL查询 (Uploaded Files Queries)
+	// 对应API: 文件管理接口
+	// 注意: 对应 migration/000002_first_newfunction.up.sql 中的表结构
+	// =============================================
+	// =============================================
+	// 表结构说明 (已在migration中创建)
+	// =============================================
+	// uploaded_files: 上传文件表
+	//   - file_id (varchar 11, PK, 格式: F0000000001)
+	//   - uploader_id (varchar 10, FK -> users)
+	//   - file_name (varchar 255)
+	//   - file_path (varchar 512)
+	//   - file_size (bigint)
+	//   - mime_type (varchar 255)
+	//   - upload_context (uploaded_file_type ENUM: avatar/chat_image/file)
+	//   - related_room_id (varchar 9, FK -> chatrooms, 可选)
+	//   - uploaded_at (TIMESTAMPTZ)
+	//   - is_deleted (boolean)
+	// =============================================
+	// 1. 文件记录创建 (File Record Creation)
+	// =============================================
+	// 创建文件上传记录
+	CreateFileRecord(ctx context.Context, arg CreateFileRecordParams) (UploadedFile, error)
+	// 创建好友相关通知
+	CreateFriendNotification(ctx context.Context, arg CreateFriendNotificationParams) (Notification, error)
+	// =============================================
+	// 好友关系相关SQL查询 (Friend Queries)
+	// 对应API: 好友关系接口
+	// 注意: 对应 migration/000002_first_newfunction.up.sql 中的表结构
+	// =============================================
+	// =============================================
+	// 表结构说明 (已在migration中创建)
+	// =============================================
+	// friend_request: 好友请求表
+	//   - request_id (varchar 12, PK, 格式: FR0000000001)
+	//   - from_user_id (varchar 10, FK -> users)
+	//   - to_user_id (varchar 10, FK -> users)
+	//   - message (TEXT)
+	//   - status (friend_request_status ENUM: pending/accepted/rejected)
+	//   - createtime (TIMESTAMPTZ)
+	//   - handled_at (TIMESTAMPTZ)
+	//
+	// friends: 好友关系表 (使用规范化设计，user_id_1 < user_id_2)
+	//   - relation_id (varchar 11, PK, 格式: R0000000001)
+	//   - user_id_1 (varchar 10, FK -> users)
+	//   - user_id_2 (varchar 10, FK -> users)
+	//   - established_at (TIMESTAMPTZ)
+	//   - CHECK (user_id_1 < user_id_2)
+	// =============================================
+	// 1. 好友请求操作 (Friend Request Operations)
+	// =============================================
+	// 发送好友请求 POST /friends/request
+	CreateFriendRequest(ctx context.Context, arg CreateFriendRequestParams) (FriendRequest, error)
+	// =============================================
+	// 3. 好友关系操作 (Friendship Operations)
+	// =============================================
+	// 创建好友关系（单条记录，user_id_1 < user_id_2）
+	// 调用时需要在应用层确保 user_id_1 < user_id_2
+	CreateFriendship(ctx context.Context, arg CreateFriendshipParams) error
 	// =============================================
 	// 2. 全局禁言记录 (Global Mute Records)
 	// =============================================
@@ -94,6 +244,8 @@ type Querier interface {
 	// =============================================
 	// 发送消息 POST /chatrooms/:roomId/messages
 	CreateMessage(ctx context.Context, arg CreateMessageParams) (Message, error)
+	// 创建消息举报（需要提供聊天室ID）
+	CreateMessageReport(ctx context.Context, arg CreateMessageReportParams) (Report, error)
 	// 创建禁言操作日志
 	CreateMuteLog(ctx context.Context, arg CreateMuteLogParams) (AdminLog, error)
 	// =============================================
@@ -105,8 +257,57 @@ type Querier interface {
 	// =============================================
 	// 创建禁言记录 POST /chatrooms/:roomId/members/:userId/mute
 	CreateMuteRecord(ctx context.Context, arg CreateMuteRecordParams) (MuteRecord, error)
+	// =============================================
+	// 通知系统相关SQL查询 (Notification Queries)
+	// 对应API: 通知系统接口
+	// 注意: 对应 migration/000002_first_newfunction.up.sql 中的表结构
+	// =============================================
+	// =============================================
+	// 表结构说明 (已在migration中创建)
+	// =============================================
+	// notifications: 通知表
+	//   - notification_id (varchar 11, PK, 格式: N0000000001)
+	//   - user_id (varchar 10, FK -> users)
+	//   - type (notification_type ENUM: friend/chatroom/system)
+	//   - title (varchar 255)
+	//   - content (TEXT)
+	//   - data (JSONB)
+	//   - is_read (boolean)
+	//   - created_at (TIMESTAMPTZ)
+	// =============================================
+	// 1. 通知创建 (Notification Creation)
+	// =============================================
+	// 创建通知
+	CreateNotification(ctx context.Context, arg CreateNotificationParams) (Notification, error)
+	// =============================================
+	// 举报系统相关SQL查询 (Report Queries)
+	// 对应API: 举报系统接口
+	// 注意: 对应 migration/000002_first_newfunction.up.sql 中的表结构
+	// =============================================
+	// =============================================
+	// 表结构说明 (已在migration中创建)
+	// =============================================
+	// reports: 举报表
+	//   - report_id (varchar 11, PK, 格式: RP0000000001)
+	//   - reporter_id (varchar 10, FK -> users)
+	//   - target_type (report_type ENUM: user/message)
+	//   - target_id (varchar 21)
+	//   - room_id (varchar 9, FK -> chatrooms, 可选)
+	//   - reason (report_reason ENUM: spam/harassment/inappropriate/other)
+	//   - description (TEXT)
+	//   - status (report_status ENUM: pending/resolved/rejected)
+	//   - created_at (TIMESTAMPTZ)
+	//   - resloved_at (TIMESTAMPTZ) ← 注意拼写错误 (resolved)
+	//   - resolved_by (varchar 10, FK -> users)
+	// =============================================
+	// 1. 举报创建 (Report Creation)
+	// =============================================
+	// 创建举报 POST /reports
+	CreateReport(ctx context.Context, arg CreateReportParams) (Report, error)
 	// 创建角色变更操作日志
 	CreateRoleChangeLog(ctx context.Context, arg CreateRoleChangeLogParams) (AdminLog, error)
+	// 创建系统通知
+	CreateSystemNotification(ctx context.Context, arg CreateSystemNotificationParams) (Notification, error)
 	// 创建解除禁言操作日志
 	CreateUnmuteLog(ctx context.Context, arg CreateUnmuteLogParams) (AdminLog, error)
 	// =============================================
@@ -118,6 +319,32 @@ type Querier interface {
 	// =============================================
 	// 用户注册 POST /auth/register
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
+	// 创建用户举报
+	CreateUserReport(ctx context.Context, arg CreateUserReportParams) (Report, error)
+	// =============================================
+	// 用户设置相关SQL查询 (User Settings Queries)
+	// 对应API: 用户设置接口
+	// 注意: 对应 migration/000002_first_newfunction.up.sql 中的表结构
+	// =============================================
+	// =============================================
+	// 表结构说明 (已在migration中创建)
+	// =============================================
+	// user_settings: 用户设置表
+	//   - user_id (varchar 10, PK, FK -> users)
+	//   - enable_friend_request (boolean)
+	//   - enable_chatroom_messages (boolean) ← 注意是复数
+	//   - enable_system_notice (boolean)
+	//   - enable_sound (boolean)
+	//   - enable_desktop_notification (boolean)
+	//   - allow_search_by_phone (boolean)
+	//   - allow_search_by_email (boolean)
+	//   - show_online_status (boolean)
+	//   - update_at (TIMESTAMPTZ) ← 注意字段名
+	// =============================================
+	// 1. 用户设置操作 (User Settings Operations)
+	// =============================================
+	// 创建用户设置（用户注册时调用）
+	CreateUserSettings(ctx context.Context, userID string) (UserSetting, error)
 	// 解除全局禁言
 	DeactivateGlobalMuteRecord(ctx context.Context, mutedUserID string) error
 	// 通过ID解除全局禁言
@@ -132,6 +359,14 @@ type Querier interface {
 	DecrementChatroomOnlineCount(ctx context.Context, roomID string) error
 	// 删除聊天室（软删除）DELETE /chatrooms/:roomId
 	DeleteChatroom(ctx context.Context, roomID string) error
+	// 删除反馈（慎用）
+	DeleteFeedback(ctx context.Context, feedbackID string) error
+	// 删除文件记录（硬删除，慎用）
+	DeleteFileRecord(ctx context.Context, arg DeleteFileRecordParams) error
+	// 删除用户的所有文件记录（用户注销时）
+	DeleteFilesByUploader(ctx context.Context, uploaderID string) error
+	// 删除好友关系 DELETE /friends/:userId
+	DeleteFriendship(ctx context.Context, arg DeleteFriendshipParams) error
 	// 删除消息 DELETE /chatrooms/:roomId/messages/:messageId
 	DeleteMessage(ctx context.Context, messageID string) error
 	// 软删除消息（将内容置为系统消息提示）
@@ -145,8 +380,22 @@ type Querier interface {
 	DeleteMessagesByUser(ctx context.Context, senderID sql.NullString) error
 	// 删除用户在指定聊天室的所有消息
 	DeleteMessagesByUserInRoom(ctx context.Context, arg DeleteMessagesByUserInRoomParams) error
+	// 删除通知
+	DeleteNotification(ctx context.Context, arg DeleteNotificationParams) error
+	// 删除超过指定天数的已标记删除的文件记录
+	DeleteOldDeletedFiles(ctx context.Context, dollar_1 sql.NullString) error
+	// 删除超过指定天数的已完成反馈
+	DeleteOldFeedbacks(ctx context.Context, dollar_1 sql.NullString) error
+	// 删除超过指定天数的通知
+	DeleteOldNotifications(ctx context.Context, dollar_1 sql.NullString) error
+	// 删除已读通知
+	DeleteReadNotifications(ctx context.Context, userID string) error
+	// 删除举报（慎用）
+	DeleteReport(ctx context.Context, reportID string) error
 	// 删除用户账号（软删除）
 	DeleteUserAccount(ctx context.Context, userID string) error
+	// 删除用户设置（用户注销时调用）
+	DeleteUserSettings(ctx context.Context, userID string) error
 	// 批量过期全局禁言记录
 	ExpireGlobalMuteRecords(ctx context.Context) error
 	// 批量过期禁言记录
@@ -180,6 +429,8 @@ type Querier interface {
 	GetAdminLogsByUser(ctx context.Context, arg GetAdminLogsByUserParams) ([]GetAdminLogsByUserRow, error)
 	// 获取所有有效的全局禁言记录
 	GetAllActiveGlobalMuteRecords(ctx context.Context, arg GetAllActiveGlobalMuteRecordsParams) ([]GetAllActiveGlobalMuteRecordsRow, error)
+	// 获取所有反馈（管理员使用）
+	GetAllFeedbacks(ctx context.Context, arg GetAllFeedbacksParams) ([]GetAllFeedbacksRow, error)
 	// 获取聊天室管理员列表
 	GetChatroomAdmins(ctx context.Context, roomID string) ([]GetChatroomAdminsRow, error)
 	// 获取聊天室详情 GET /chatrooms/:roomId
@@ -193,12 +444,49 @@ type Querier interface {
 	GetChatroomOwner(ctx context.Context, roomID string) (GetChatroomOwnerRow, error)
 	// 获取聊天室详情（不含密码，用于公开展示）
 	GetChatroomWithoutPassword(ctx context.Context, roomID string) (GetChatroomWithoutPasswordRow, error)
+	// =============================================
+	// 2. 反馈查询 (Feedback Queries)
+	// =============================================
+	// 获取反馈详情
+	GetFeedbackByID(ctx context.Context, feedbackID string) (Feedback, error)
+	// 获取反馈统计（总数、各类型数量、各状态数量）
+	GetFeedbackStats(ctx context.Context) (GetFeedbackStatsRow, error)
+	// 按状态获取反馈列表（管理员使用）
+	GetFeedbacksByStatus(ctx context.Context, arg GetFeedbacksByStatusParams) ([]GetFeedbacksByStatusRow, error)
+	// 按类型获取反馈列表（管理员使用）
+	GetFeedbacksByType(ctx context.Context, arg GetFeedbacksByTypeParams) ([]GetFeedbacksByTypeRow, error)
+	// 获取用户提交的反馈列表
+	GetFeedbacksByUser(ctx context.Context, arg GetFeedbacksByUserParams) ([]Feedback, error)
+	// =============================================
+	// 2. 文件记录查询 (File Record Queries)
+	// =============================================
+	// 获取文件记录详情
+	GetFileByID(ctx context.Context, fileID string) (UploadedFile, error)
+	// 根据文件路径获取文件记录
+	GetFileByPath(ctx context.Context, filePath string) (UploadedFile, error)
+	// 获取文件统计（总数、各类型数量、总大小）
+	GetFileStats(ctx context.Context) (GetFileStatsRow, error)
+	// 按上传类型获取文件列表
+	GetFilesByContext(ctx context.Context, arg GetFilesByContextParams) ([]UploadedFile, error)
+	// 获取聊天室的文件列表
+	GetFilesByRoom(ctx context.Context, arg GetFilesByRoomParams) ([]UploadedFile, error)
+	// 获取用户上传的文件列表
+	GetFilesByUploader(ctx context.Context, arg GetFilesByUploaderParams) ([]UploadedFile, error)
+	// 获取好友请求详情
+	GetFriendRequestByID(ctx context.Context, requestID string) (FriendRequest, error)
+	// =============================================
+	// 4. 好友列表查询 (Friend List Queries)
+	// =============================================
+	// 获取好友列表 GET /users/me/friends
+	GetFriends(ctx context.Context, arg GetFriendsParams) ([]GetFriendsRow, error)
 	// 获取全局管理日志
 	GetGlobalAdminLogs(ctx context.Context, arg GetGlobalAdminLogsParams) ([]GetGlobalAdminLogsRow, error)
 	// 获取全局禁言记录
 	GetGlobalMuteRecordByID(ctx context.Context, globalMuteID string) (GlobalMuteRecord, error)
 	// 获取用户的所有全局禁言记录
 	GetGlobalMuteRecordsByUser(ctx context.Context, arg GetGlobalMuteRecordsByUserParams) ([]GlobalMuteRecord, error)
+	// 获取最大的文件列表
+	GetLargestFiles(ctx context.Context, limit int64) ([]UploadedFile, error)
 	// 获取聊天室最后一条消息
 	GetLastMessageInRoom(ctx context.Context, roomID string) (GetLastMessageInRoomRow, error)
 	// 获取最新消息
@@ -240,6 +528,14 @@ type Querier interface {
 	GetMessagesByUserInRoom(ctx context.Context, arg GetMessagesByUserInRoomParams) ([]Message, error)
 	// 获取引用了指定消息的消息列表
 	GetMessagesQuotingThis(ctx context.Context, quotedMessageID sql.NullString) ([]GetMessagesQuotingThisRow, error)
+	// 获取提交反馈最多的用户
+	GetMostActiveFeedbackUsers(ctx context.Context, limit int64) ([]GetMostActiveFeedbackUsersRow, error)
+	// 获取上传文件最多的用户
+	GetMostActiveUploaders(ctx context.Context, limit int64) ([]GetMostActiveUploadersRow, error)
+	// 获取被举报次数最多的消息
+	GetMostReportedMessages(ctx context.Context, limit int64) ([]GetMostReportedMessagesRow, error)
+	// 获取被举报次数最多的用户
+	GetMostReportedUsers(ctx context.Context, limit int64) ([]GetMostReportedUsersRow, error)
 	// 获取禁言记录
 	GetMuteRecordByID(ctx context.Context, muteRecordID string) (MuteRecord, error)
 	// 获取成员的所有禁言记录
@@ -248,21 +544,82 @@ type Querier interface {
 	GetMuteRecordsByRoom(ctx context.Context, arg GetMuteRecordsByRoomParams) ([]GetMuteRecordsByRoomRow, error)
 	// 获取被禁言的成员列表
 	GetMutedMembers(ctx context.Context, roomID string) ([]GetMutedMembersRow, error)
+	// 获取共同好友（两个用户的共同好友）
+	GetMutualFriends(ctx context.Context, arg GetMutualFriendsParams) ([]GetMutualFriendsRow, error)
+	// 获取新提交的反馈（status='new'）
+	GetNewFeedbacks(ctx context.Context, arg GetNewFeedbacksParams) ([]GetNewFeedbacksRow, error)
+	// 注意: 批量创建通知需要在应用层使用循环调用 CreateNotification
+	// 或者使用事务处理多次插入
+	// =============================================
+	// 2. 通知查询 (Notification Queries)
+	// =============================================
+	// 获取单条通知
+	GetNotificationByID(ctx context.Context, notificationID string) (Notification, error)
+	// 获取通知统计（总数、未读数、各类型未读数）
+	GetNotificationStats(ctx context.Context, userID string) (GetNotificationStatsRow, error)
 	// 获取聊天室在线成员列表 GET /chatrooms/:roomId/members?status=online
 	GetOnlineChatroomMembers(ctx context.Context, arg GetOnlineChatroomMembersParams) ([]GetOnlineChatroomMembersRow, error)
+	// 获取在线好友列表 GET /users/me/friends?status=online
+	GetOnlineFriends(ctx context.Context, arg GetOnlineFriendsParams) ([]GetOnlineFriendsRow, error)
 	// 获取在线用户列表
 	GetOnlineUsers(ctx context.Context, arg GetOnlineUsersParams) ([]GetOnlineUsersRow, error)
 	// 获取各操作员的操作统计
 	GetOperatorStats(ctx context.Context, limit int64) ([]GetOperatorStatsRow, error)
+	// 获取待处理的收到的好友请求
+	GetPendingReceivedRequests(ctx context.Context, arg GetPendingReceivedRequestsParams) ([]GetPendingReceivedRequestsRow, error)
+	// 获取待处理的举报（管理员使用）
+	GetPendingReports(ctx context.Context, arg GetPendingReportsParams) ([]GetPendingReportsRow, error)
+	// 检查两个用户之间是否有待处理的请求
+	GetPendingRequestBetweenUsers(ctx context.Context, arg GetPendingRequestBetweenUsersParams) (FriendRequest, error)
 	// =============================================
 	// 5. 引用消息 (Quoted Messages)
 	// =============================================
 	// 获取被引用的消息
 	GetQuotedMessage(ctx context.Context, messageID string) (GetQuotedMessageRow, error)
+	// =============================================
+	// 2. 好友请求列表 (Friend Request Lists)
+	// =============================================
+	// 获取收到的好友请求 GET /users/me/friend-requests?type=received
+	GetReceivedFriendRequests(ctx context.Context, arg GetReceivedFriendRequestsParams) ([]GetReceivedFriendRequestsRow, error)
+	// 获取最近反馈趋势（按日期分组）
+	GetRecentFeedbackTrend(ctx context.Context) ([]GetRecentFeedbackTrendRow, error)
+	// 获取最近上传趋势（按日期分组）
+	GetRecentUploadTrend(ctx context.Context) ([]GetRecentUploadTrendRow, error)
+	// =============================================
+	// 2. 举报查询 (Report Queries)
+	// =============================================
+	// 获取举报详情
+	GetReportByID(ctx context.Context, reportID string) (Report, error)
+	// 获取举报统计（总数、待处理、已处理、已拒绝）
+	GetReportStats(ctx context.Context) (GetReportStatsRow, error)
+	// 获取针对特定目标的所有举报
+	GetReportsAgainstTarget(ctx context.Context, arg GetReportsAgainstTargetParams) ([]Report, error)
+	// 获取用户提交的举报列表
+	GetReportsByReporter(ctx context.Context, arg GetReportsByReporterParams) ([]Report, error)
+	// 按状态获取举报列表（管理员使用）
+	GetReportsByStatus(ctx context.Context, arg GetReportsByStatusParams) ([]GetReportsByStatusRow, error)
+	// 按目标类型获取举报列表（管理员使用）
+	GetReportsByTargetType(ctx context.Context, arg GetReportsByTargetTypeParams) ([]GetReportsByTargetTypeRow, error)
+	// 获取聊天室文件占用的存储空间大小
+	GetRoomStorageSize(ctx context.Context, relatedRoomID sql.NullString) (sql.NullString, error)
+	// 获取允许通过邮箱搜索的用户
+	GetSearchableUsersByEmail(ctx context.Context, email sql.NullString) ([]GetSearchableUsersByEmailRow, error)
+	// 获取允许通过手机号搜索的用户
+	GetSearchableUsersByPhone(ctx context.Context, phoneNumber sql.NullString) ([]GetSearchableUsersByPhoneRow, error)
+	// 获取发送的好友请求 GET /users/me/friend-requests?type=sent
+	GetSentFriendRequests(ctx context.Context, arg GetSentFriendRequestsParams) ([]GetSentFriendRequestsRow, error)
+	// 获取系统总存储空间使用
+	GetTotalStorageSize(ctx context.Context) (sql.NullString, error)
 	// 获取未读消息数量
 	GetUnreadMessageCount(ctx context.Context, arg GetUnreadMessageCountParams) (int64, error)
 	// 获取未读消息列表
 	GetUnreadMessages(ctx context.Context, arg GetUnreadMessagesParams) ([]GetUnreadMessagesRow, error)
+	// 获取未读通知 GET /users/me/notifications?status=unread
+	GetUnreadNotifications(ctx context.Context, arg GetUnreadNotificationsParams) ([]Notification, error)
+	// 按类型获取未读通知
+	GetUnreadNotificationsByType(ctx context.Context, arg GetUnreadNotificationsByTypeParams) ([]Notification, error)
+	// 获取用户的头像历史记录
+	GetUserAvatars(ctx context.Context, arg GetUserAvatarsParams) ([]UploadedFile, error)
 	// 用户登录时通过邮箱查找 POST /auth/login
 	GetUserByEmail(ctx context.Context, email sql.NullString) (User, error)
 	// 根据ID获取用户信息 GET /users/:userId
@@ -273,10 +630,24 @@ type Querier interface {
 	GetUserChatroomMembership(ctx context.Context, arg GetUserChatroomMembershipParams) (ChatroomMember, error)
 	// 获取用户全局禁言到期时间
 	GetUserGlobalMuteExpireTime(ctx context.Context, mutedUserID string) (time.Time, error)
+	// 获取用户最新的头像
+	GetUserLatestAvatar(ctx context.Context, uploaderID string) (UploadedFile, error)
 	// 获取用户的禁言状态（返回全局禁言和聊天室禁言状态）
 	GetUserMuteStatus(ctx context.Context, arg GetUserMuteStatusParams) (GetUserMuteStatusRow, error)
+	// 获取用户通知偏好
+	GetUserNotificationPreferences(ctx context.Context, userID string) (GetUserNotificationPreferencesRow, error)
+	// 获取用户通知列表 GET /users/me/notifications
+	GetUserNotifications(ctx context.Context, arg GetUserNotificationsParams) ([]Notification, error)
+	// 按类型获取用户通知 GET /users/me/notifications?type=friend
+	GetUserNotificationsByType(ctx context.Context, arg GetUserNotificationsByTypeParams) ([]Notification, error)
+	// 获取用户隐私偏好
+	GetUserPrivacyPreferences(ctx context.Context, userID string) (GetUserPrivacyPreferencesRow, error)
 	// 获取用户公开信息（不含敏感信息）GET /users/:userId
 	GetUserPublicInfo(ctx context.Context, userID string) (GetUserPublicInfoRow, error)
+	// 获取用户设置 GET /users/me/settings
+	GetUserSettings(ctx context.Context, userID string) (UserSetting, error)
+	// 获取用户已使用的存储空间大小
+	GetUserStorageSize(ctx context.Context, uploaderID string) (sql.NullString, error)
 	// 获取用户系统角色
 	GetUserSystemRole(ctx context.Context, userID string) (NullUserSystemRole, error)
 	// 获取用户在所有聊天室的未读消息数
@@ -287,6 +658,11 @@ type Querier interface {
 	// 批量获取用户信息
 	GetUsersByIDs(ctx context.Context, dollar_1 []string) ([]GetUsersByIDsRow, error)
 	// =============================================
+	// 3. 批量操作 (Batch Operations)
+	// =============================================
+	// 获取允许接收好友请求的用户ID列表
+	GetUsersWithFriendRequestEnabled(ctx context.Context, dollar_1 []string) ([]string, error)
+	// =============================================
 	// 8. 聊天室统计 (Chatroom Statistics)
 	// =============================================
 	// 增加成员计数
@@ -295,6 +671,8 @@ type Querier interface {
 	IncrementChatroomOnlineCount(ctx context.Context, roomID string) error
 	// 检查聊天室是否为公开
 	IsChatroomPublic(ctx context.Context, roomID string) (bool, error)
+	// 检查是否是好友
+	IsFriend(ctx context.Context, arg IsFriendParams) (bool, error)
 	// 检查成员是否被禁言
 	IsMemberMuted(ctx context.Context, arg IsMemberMutedParams) (bool, error)
 	// 检查成员在聊天室是否被禁言
@@ -314,6 +692,13 @@ type Querier interface {
 	IsUserInChatroom(ctx context.Context, arg IsUserInChatroomParams) (bool, error)
 	// 检查用户是否为房主
 	IsUserOwner(ctx context.Context, arg IsUserOwnerParams) (bool, error)
+	// 检查用户是否允许通过邮箱搜索
+	IsUserSearchableByEmail(ctx context.Context, userID string) (bool, error)
+	// =============================================
+	// 2. 设置查询辅助 (Settings Query Helpers)
+	// =============================================
+	// 检查用户是否允许通过手机号搜索
+	IsUserSearchableByPhone(ctx context.Context, userID string) (bool, error)
 	// =============================================
 	// 3. 聊天室成员操作 (Member Operations)
 	// =============================================
@@ -330,17 +715,54 @@ type Querier interface {
 	// =============================================
 	// 获取用户的聊天室列表 GET /users/me/chatrooms
 	ListUserChatrooms(ctx context.Context, arg ListUserChatroomsParams) ([]ListUserChatroomsRow, error)
+	// 标记所有通知已读 POST /users/me/notifications/read-all
+	MarkAllNotificationsAsRead(ctx context.Context, userID string) error
+	// 标记反馈为已关闭
+	MarkFeedbackAsClosed(ctx context.Context, feedbackID string) error
+	// 标记反馈为已完成
+	MarkFeedbackAsCompleted(ctx context.Context, feedbackID string) error
+	// 标记反馈为处理中
+	MarkFeedbackAsInProgress(ctx context.Context, feedbackID string) error
+	// 标记反馈为已审阅
+	MarkFeedbackAsReviewed(ctx context.Context, feedbackID string) error
+	// =============================================
+	// 3. 文件记录管理 (File Record Management)
+	// =============================================
+	// 标记文件为已删除（软删除）
+	MarkFileAsDeleted(ctx context.Context, arg MarkFileAsDeletedParams) error
+	// =============================================
+	// 3. 通知状态管理 (Notification Status Management)
+	// =============================================
+	// 标记通知已读 POST /notifications/:notificationId/read
+	MarkNotificationAsRead(ctx context.Context, arg MarkNotificationAsReadParams) error
+	// 按类型标记通知已读
+	MarkNotificationsByTypeAsRead(ctx context.Context, arg MarkNotificationsByTypeAsReadParams) error
 	// =============================================
 	// 6. 禁言管理 (Mute Management)
 	// =============================================
 	// 禁言成员 POST /chatrooms/:roomId/members/:userId/mute
 	MuteMember(ctx context.Context, arg MuteMemberParams) error
+	// 拒绝好友请求 POST /friends/request/:requestId/handle
+	RejectFriendRequest(ctx context.Context, arg RejectFriendRequestParams) (FriendRequest, error)
+	// 拒绝举报
+	RejectReport(ctx context.Context, arg RejectReportParams) (Report, error)
 	// 取消管理员 POST /chatrooms/:roomId/members/:userId/remove-admin
 	RemoveMemberAdmin(ctx context.Context, arg RemoveMemberAdminParams) error
+	// =============================================
+	// 3. 举报处理 (Report Handling)
+	// =============================================
+	// 处理举报（标记为已处理）
+	ResolveReport(ctx context.Context, arg ResolveReportParams) (Report, error)
+	// 恢复已删除的文件
+	RestoreDeletedFile(ctx context.Context, arg RestoreDeletedFileParams) error
 	// 在聊天室内搜索成员（模糊查询用户名或昵称）
 	SearchChatroomMembers(ctx context.Context, arg SearchChatroomMembersParams) ([]SearchChatroomMembersRow, error)
 	// 搜索聊天室
 	SearchChatrooms(ctx context.Context, arg SearchChatroomsParams) ([]SearchChatroomsRow, error)
+	// 搜索反馈（按标题和内容）
+	SearchFeedbacks(ctx context.Context, arg SearchFeedbacksParams) ([]SearchFeedbacksRow, error)
+	// 搜索好友
+	SearchFriends(ctx context.Context, arg SearchFriendsParams) ([]SearchFriendsRow, error)
 	// =============================================
 	// 4. 消息搜索 (Message Search)
 	// =============================================
@@ -364,6 +786,8 @@ type Querier interface {
 	SetUserOnline(ctx context.Context, userID string) error
 	// 设置用户系统角色（超级管理员操作）
 	SetUserSystemRole(ctx context.Context, arg SetUserSystemRoleParams) error
+	// 检查用户是否显示在线状态
+	ShouldShowOnlineStatus(ctx context.Context, userID string) (bool, error)
 	// 封禁用户账号（管理员操作）
 	SuspendUser(ctx context.Context, userID string) error
 	// 同步成员计数（用于数据修复）
@@ -384,6 +808,11 @@ type Querier interface {
 	// 更新最后活跃时间
 	UpdateChatroomLastActiveTime(ctx context.Context, roomID string) error
 	// =============================================
+	// 3. 反馈状态管理 (Feedback Status Management)
+	// =============================================
+	// 更新反馈状态
+	UpdateFeedbackStatus(ctx context.Context, arg UpdateFeedbackStatusParams) (Feedback, error)
+	// =============================================
 	// 7. 消息已读管理 (Read Status Management)
 	// =============================================
 	// 更新最后阅读时间 POST /chatrooms/:roomId/messages/read
@@ -392,6 +821,10 @@ type Querier interface {
 	UpdateMemberLastReadToMessage(ctx context.Context, arg UpdateMemberLastReadToMessageParams) error
 	// 编辑消息 PUT /chatrooms/:roomId/messages/:messageId
 	UpdateMessage(ctx context.Context, arg UpdateMessageParams) (Message, error)
+	// 更新通知设置
+	UpdateNotificationSettings(ctx context.Context, arg UpdateNotificationSettingsParams) error
+	// 更新隐私设置
+	UpdatePrivacySettings(ctx context.Context, arg UpdatePrivacySettingsParams) error
 	// =============================================
 	// 2. 用户信息管理 (User Profile Management)
 	// =============================================
@@ -408,6 +841,8 @@ type Querier interface {
 	UpdateUserOnlineStatus(ctx context.Context, arg UpdateUserOnlineStatusParams) error
 	// 修改密码 POST /auth/change-password
 	UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) error
+	// 更新用户设置 POST /users/me/settings/update
+	UpdateUserSettings(ctx context.Context, arg UpdateUserSettingsParams) (UserSetting, error)
 	// 验证聊天室密码
 	VerifyChatroomPassword(ctx context.Context, arg VerifyChatroomPasswordParams) (bool, error)
 }

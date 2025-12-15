@@ -1,29 +1,23 @@
 -- =============================================
 -- 用户设置相关SQL查询 (User Settings Queries)
 -- 对应API: 用户设置接口
--- 注意: 需要先创建 user_settings 表
+-- 注意: 对应 migration/000002_first_newfunction.up.sql 中的表结构
 -- =============================================
 
 -- =============================================
--- 表结构参考 (需要在migration中创建)
+-- 表结构说明 (已在migration中创建)
 -- =============================================
--- CREATE TABLE user_settings (
---     user_id VARCHAR(10) PRIMARY KEY REFERENCES users(user_id) ON DELETE CASCADE,
---     -- 通知设置
---     enable_friend_request BOOLEAN NOT NULL DEFAULT TRUE,
---     enable_chatroom_message BOOLEAN NOT NULL DEFAULT TRUE,
---     enable_system_notice BOOLEAN NOT NULL DEFAULT TRUE,
---     enable_sound BOOLEAN NOT NULL DEFAULT TRUE,
---     enable_desktop_notification BOOLEAN NOT NULL DEFAULT TRUE,
---     -- 隐私设置
---     allow_search_by_phone BOOLEAN NOT NULL DEFAULT TRUE,
---     allow_search_by_email BOOLEAN NOT NULL DEFAULT TRUE,
---     show_online_status BOOLEAN NOT NULL DEFAULT TRUE,
---     -- 其他设置
---     theme VARCHAR(20) DEFAULT 'light',
---     language VARCHAR(10) DEFAULT 'zh-CN',
---     updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
--- );
+-- user_settings: 用户设置表
+--   - user_id (varchar 10, PK, FK -> users)
+--   - enable_friend_request (boolean)
+--   - enable_chatroom_messages (boolean) ← 注意是复数
+--   - enable_system_notice (boolean)
+--   - enable_sound (boolean)
+--   - enable_desktop_notification (boolean)
+--   - allow_search_by_phone (boolean)
+--   - allow_search_by_email (boolean)
+--   - show_online_status (boolean)
+--   - update_at (TIMESTAMPTZ) ← 注意字段名
 
 -- =============================================
 -- 1. 用户设置操作 (User Settings Operations)
@@ -36,75 +30,67 @@ VALUES ($1)
 RETURNING 
     user_id,
     enable_friend_request,
-    enable_chatroom_message,
+    enable_chatroom_messages,
     enable_system_notice,
     enable_sound,
     enable_desktop_notification,
     allow_search_by_phone,
     allow_search_by_email,
     show_online_status,
-    theme,
-    language,
-    updated_at;
+    update_at;
 
 -- name: GetUserSettings :one
 -- 获取用户设置 GET /users/me/settings
 SELECT 
     user_id,
     enable_friend_request,
-    enable_chatroom_message,
+    enable_chatroom_messages,
     enable_system_notice,
     enable_sound,
     enable_desktop_notification,
     allow_search_by_phone,
     allow_search_by_email,
     show_online_status,
-    theme,
-    language,
-    updated_at
+    update_at
 FROM user_settings 
 WHERE user_id = $1;
 
 -- name: UpdateUserSettings :one
--- 更新用户设置 PUT /users/me/settings
+-- 更新用户设置 POST /users/me/settings/update
 UPDATE user_settings 
 SET 
     enable_friend_request = COALESCE($2, enable_friend_request),
-    enable_chatroom_message = COALESCE($3, enable_chatroom_message),
+    enable_chatroom_messages = COALESCE($3, enable_chatroom_messages),
     enable_system_notice = COALESCE($4, enable_system_notice),
     enable_sound = COALESCE($5, enable_sound),
     enable_desktop_notification = COALESCE($6, enable_desktop_notification),
     allow_search_by_phone = COALESCE($7, allow_search_by_phone),
     allow_search_by_email = COALESCE($8, allow_search_by_email),
     show_online_status = COALESCE($9, show_online_status),
-    theme = COALESCE($10, theme),
-    language = COALESCE($11, language),
-    updated_at = NOW()
+    update_at = NOW()
 WHERE user_id = $1
 RETURNING 
     user_id,
     enable_friend_request,
-    enable_chatroom_message,
+    enable_chatroom_messages,
     enable_system_notice,
     enable_sound,
     enable_desktop_notification,
     allow_search_by_phone,
     allow_search_by_email,
     show_online_status,
-    theme,
-    language,
-    updated_at;
+    update_at;
 
 -- name: UpdateNotificationSettings :exec
 -- 更新通知设置
 UPDATE user_settings 
 SET 
     enable_friend_request = COALESCE($2, enable_friend_request),
-    enable_chatroom_message = COALESCE($3, enable_chatroom_message),
+    enable_chatroom_messages = COALESCE($3, enable_chatroom_messages),
     enable_system_notice = COALESCE($4, enable_system_notice),
     enable_sound = COALESCE($5, enable_sound),
     enable_desktop_notification = COALESCE($6, enable_desktop_notification),
-    updated_at = NOW()
+    update_at = NOW()
 WHERE user_id = $1;
 
 -- name: UpdatePrivacySettings :exec
@@ -114,23 +100,7 @@ SET
     allow_search_by_phone = COALESCE($2, allow_search_by_phone),
     allow_search_by_email = COALESCE($3, allow_search_by_email),
     show_online_status = COALESCE($4, show_online_status),
-    updated_at = NOW()
-WHERE user_id = $1;
-
--- name: UpdateThemeSettings :exec
--- 更新主题设置
-UPDATE user_settings 
-SET 
-    theme = $2,
-    updated_at = NOW()
-WHERE user_id = $1;
-
--- name: UpdateLanguageSettings :exec
--- 更新语言设置
-UPDATE user_settings 
-SET 
-    language = $2,
-    updated_at = NOW()
+    update_at = NOW()
 WHERE user_id = $1;
 
 -- name: DeleteUserSettings :exec
@@ -164,7 +134,7 @@ WHERE user_id = $1;
 -- 获取用户通知偏好
 SELECT 
     enable_friend_request,
-    enable_chatroom_message,
+    enable_chatroom_messages,
     enable_system_notice,
     enable_sound,
     enable_desktop_notification
