@@ -1,0 +1,3 @@
+DROP FUNCTION invitation_effective_status(chatroom_invitations,timestamptz);
+DROP INDEX idx_invitation_pair_history;
+DROP INDEX idx_invitation_room;

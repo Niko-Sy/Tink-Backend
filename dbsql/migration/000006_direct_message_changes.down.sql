@@ -1,0 +1,10 @@
+DO $$ BEGIN IF EXISTS(SELECT 1 FROM direct_message_changes) THEN RAISE EXCEPTION 'Unsafe rollback: retain direct recovery history'; END IF; END $$;
+DROP TRIGGER validate_direct_ledger ON messages;
+DROP FUNCTION validate_direct_ledger();
+DROP TRIGGER require_direct_revision ON messages;
+DROP FUNCTION require_direct_revision();
+DROP TRIGGER validate_direct_change ON direct_message_changes;
+DROP FUNCTION validate_direct_change();
+DROP TABLE direct_message_changes;
+ALTER TABLE messages DROP COLUMN direct_revision;
+ALTER TABLE direct_pairs DROP COLUMN change_revision;
