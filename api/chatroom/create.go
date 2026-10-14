@@ -1,6 +1,7 @@
 package chatroom
 
 import (
+	"chatroombackend/api/websocketmsg"
 	sqlcdb "chatroombackend/db"
 	"chatroombackend/middleware"
 	"database/sql"
@@ -177,6 +178,7 @@ func HandleCreateRoom(c *gin.Context) {
 		IsActive: member.IsActive,
 	}
 
+	websocketmsg.MembershipJoined(currentUserID, chatroom.RoomID)
 	c.JSON(http.StatusOK, gin.H{
 		"code":    200,
 		"message": "创建成功",

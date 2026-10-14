@@ -1,6 +1,7 @@
 package chatroom
 
 import (
+	"chatroombackend/api/websocketmsg"
 	sqlcdb "chatroombackend/db"
 	"chatroombackend/middleware"
 	"database/sql"
@@ -131,6 +132,7 @@ func HandleLeaveRoom(c *gin.Context) {
 
 	_ = chatroom // 避免未使用变量警告，后续可用于日志等
 
+	websocketmsg.MembershipLeft(currentUserID, req.RoomId)
 	c.JSON(http.StatusOK, gin.H{
 		"code":    200,
 		"message": "退出成功",

@@ -8,6 +8,8 @@ import (
 	"context"
 	"database/sql"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 type Querier interface {
@@ -15,8 +17,11 @@ type Querier interface {
 	AcceptFriendRequest(ctx context.Context, arg AcceptFriendRequestParams) (FriendRequest, error)
 	// 激活用户账号
 	ActivateUser(ctx context.Context, userID string) error
+	AdvanceDirectCounters(ctx context.Context, roomID string) (DirectPair, error)
+	AdvanceDirectRead(ctx context.Context, arg AdvanceDirectReadParams) (int64, error)
+	AdvanceDirectRevision(ctx context.Context, roomID string) (DirectPair, error)
 	// 归档聊天室
-	ArchiveChatroom(ctx context.Context, roomID string) error
+	ArchiveChatroom(ctx context.Context, dollar_1 string) error
 	// =============================================
 	// 3. 综合禁言检查 (Combined Mute Checks)
 	// =============================================
@@ -34,6 +39,7 @@ type Querier interface {
 	CheckUsernameExists(ctx context.Context, username string) (bool, error)
 	// 清除过期的禁言
 	ClearExpiredMutes(ctx context.Context) error
+	ConversationKind(ctx context.Context, roomID string) (string, error)
 	// =============================================
 	// 3. 日志统计 (Log Statistics)
 	// =============================================
@@ -67,6 +73,10 @@ type Querier interface {
 	CountFilesByUploader(ctx context.Context, uploaderID string) (int64, error)
 	// 统计好友数量
 	CountFriends(ctx context.Context, userID1 string) (int64, error)
+	CountInvitableRooms(ctx context.Context, arg CountInvitableRoomsParams) (int64, error)
+	CountInvitationList(ctx context.Context, arg CountInvitationListParams) (int64, error)
+	CountInvitationsMinute(ctx context.Context, inviterID string) (int64, error)
+	CountInvitationsToday(ctx context.Context, inviterID string) (int64, error)
 	// =============================================
 	// 3. 消息统计与未读 (Message Statistics)
 	// =============================================
@@ -80,6 +90,7 @@ type Querier interface {
 	CountOnlineFriends(ctx context.Context, userID1 string) (int64, error)
 	// 统计在线用户数
 	CountOnlineUsers(ctx context.Context) (int64, error)
+	CountPendingInvitations(ctx context.Context, inviteeID string) (int64, error)
 	// 统计待处理的收到的好友请求数量
 	CountPendingReceivedRequests(ctx context.Context, toUserID string) (int64, error)
 	// 统计待处理举报数量
@@ -101,6 +112,9 @@ type Querier interface {
 	CountSearchUsers(ctx context.Context, dollar_1 sql.NullString) (int64, error)
 	// 统计发送的好友请求总数（按状态）
 	CountSentFriendRequests(ctx context.Context, arg CountSentFriendRequestsParams) (int64, error)
+	CountSocialFriendList(ctx context.Context, arg CountSocialFriendListParams) (int64, error)
+	CountSocialRequestList(ctx context.Context, arg CountSocialRequestListParams) (int64, error)
+	CountSocialRequestsToday(ctx context.Context, fromUserID string) (int64, error)
 	// 统计未读通知数量
 	CountUnreadNotifications(ctx context.Context, userID string) (int64, error)
 	// 按类型统计未读通知数量
@@ -139,11 +153,13 @@ type Querier interface {
 	// 1. 聊天室基础操作 (Chatroom CRUD)
 	// =============================================
 	// 创建聊天室 POST /chatrooms
-	CreateChatroom(ctx context.Context, arg CreateChatroomParams) (Chatroom, error)
+	CreateChatroom(ctx context.Context, arg CreateChatroomParams) (CreateChatroomRow, error)
 	// 创建聊天室相关通知
 	CreateChatroomNotification(ctx context.Context, arg CreateChatroomNotificationParams) (Notification, error)
 	// 创建删除消息操作日志
 	CreateDeleteMessageLog(ctx context.Context, arg CreateDeleteMessageLogParams) (AdminLog, error)
+	CreateDirectPair(ctx context.Context, arg CreateDirectPairParams) (DirectPair, error)
+	CreateDirectRoom(ctx context.Context) (Chatroom, error)
 	// 创建功能建议
 	CreateFeatureRequest(ctx context.Context, arg CreateFeatureRequestParams) (Feedback, error)
 	// =============================================
@@ -233,6 +249,7 @@ type Querier interface {
 	// =============================================
 	// 创建全局禁言记录（超级管理员操作）
 	CreateGlobalMuteRecord(ctx context.Context, arg CreateGlobalMuteRecordParams) (GlobalMuteRecord, error)
+	CreateInvitation(ctx context.Context, arg CreateInvitationParams) (ChatroomInvitation, error)
 	// 创建踢人操作日志
 	CreateKickLog(ctx context.Context, arg CreateKickLogParams) (AdminLog, error)
 	// =============================================
@@ -243,7 +260,7 @@ type Querier interface {
 	// 1. 消息基础操作 (Message CRUD)
 	// =============================================
 	// 发送消息 POST /chatrooms/:roomId/messages
-	CreateMessage(ctx context.Context, arg CreateMessageParams) (Message, error)
+	CreateMessage(ctx context.Context, arg CreateMessageParams) (CreateMessageRow, error)
 	// 创建消息举报（需要提供聊天室ID）
 	CreateMessageReport(ctx context.Context, arg CreateMessageReportParams) (Report, error)
 	// 创建禁言操作日志
@@ -349,16 +366,17 @@ type Querier interface {
 	DeactivateGlobalMuteRecord(ctx context.Context, mutedUserID string) error
 	// 通过ID解除全局禁言
 	DeactivateGlobalMuteRecordByID(ctx context.Context, globalMuteID string) error
+	DeactivateGroupMembers(ctx context.Context, roomID string) error
 	// 解除禁言（使禁言记录失效）POST /chatrooms/:roomId/members/:userId/unmute
 	DeactivateMuteRecord(ctx context.Context, memberRelID string) error
 	// 通过ID解除禁言
 	DeactivateMuteRecordByID(ctx context.Context, muteRecordID string) error
 	// 减少成员计数
-	DecrementChatroomMemberCount(ctx context.Context, roomID string) error
+	DecrementChatroomMemberCount(ctx context.Context, dollar_1 string) error
 	// 减少在线人数
-	DecrementChatroomOnlineCount(ctx context.Context, roomID string) error
+	DecrementChatroomOnlineCount(ctx context.Context, dollar_1 string) error
 	// 删除聊天室（软删除）DELETE /chatrooms/:roomId
-	DeleteChatroom(ctx context.Context, roomID string) error
+	DeleteChatroom(ctx context.Context, dollar_1 string) error
 	// 删除反馈（慎用）
 	DeleteFeedback(ctx context.Context, feedbackID string) error
 	// 删除文件记录（硬删除，慎用）
@@ -370,7 +388,7 @@ type Querier interface {
 	// 删除消息 DELETE /chatrooms/:roomId/messages/:messageId
 	DeleteMessage(ctx context.Context, messageID string) error
 	// 软删除消息（将内容置为系统消息提示）
-	DeleteMessageSoft(ctx context.Context, messageID string) (Message, error)
+	DeleteMessageSoft(ctx context.Context, messageID string) (DeleteMessageSoftRow, error)
 	// =============================================
 	// 7. 批量操作 (Batch Operations)
 	// =============================================
@@ -396,14 +414,27 @@ type Querier interface {
 	DeleteUserAccount(ctx context.Context, userID string) error
 	// 删除用户设置（用户注销时调用）
 	DeleteUserSettings(ctx context.Context, userID string) error
+	DirectActivity(ctx context.Context, roomID string) (DirectActivityRow, error)
+	DirectChanges(ctx context.Context, arg DirectChangesParams) ([]DirectMessageChange, error)
+	DirectConversationList(ctx context.Context, arg DirectConversationListParams) ([]DirectConversationListRow, error)
+	DirectHistoryAfter(ctx context.Context, arg DirectHistoryAfterParams) ([]Message, error)
+	DirectHistoryBefore(ctx context.Context, arg DirectHistoryBeforeParams) ([]Message, error)
+	DirectMessageByID(ctx context.Context, arg DirectMessageByIDParams) (Message, error)
+	DirectMessageByKey(ctx context.Context, arg DirectMessageByKeyParams) (Message, error)
+	DirectPairByRoom(ctx context.Context, roomID string) (DirectPair, error)
+	DirectReadPosition(ctx context.Context, arg DirectReadPositionParams) (int64, error)
+	DirectUnread(ctx context.Context, arg DirectUnreadParams) (int64, error)
+	EditDirectMessage(ctx context.Context, arg EditDirectMessageParams) (Message, error)
+	EffectiveInvitationStatus(ctx context.Context, invitationID uuid.UUID) (string, error)
 	// 批量过期全局禁言记录
 	ExpireGlobalMuteRecords(ctx context.Context) error
+	ExpireInvitations(ctx context.Context) error
 	// 批量过期禁言记录
 	ExpireMuteRecords(ctx context.Context) error
 	// 获取用户当前有效的全局禁言记录
 	GetActiveGlobalMuteRecord(ctx context.Context, mutedUserID string) (GlobalMuteRecord, error)
 	// 获取有效的成员关系
-	GetActiveMembership(ctx context.Context, arg GetActiveMembershipParams) (ChatroomMember, error)
+	GetActiveMembership(ctx context.Context, arg GetActiveMembershipParams) (GetActiveMembershipRow, error)
 	// 获取成员当前有效的禁言记录
 	GetActiveMuteRecord(ctx context.Context, memberRelID string) (MuteRecord, error)
 	// 获取聊天室当前有效的禁言记录
@@ -434,7 +465,8 @@ type Querier interface {
 	// 获取聊天室管理员列表
 	GetChatroomAdmins(ctx context.Context, roomID string) ([]GetChatroomAdminsRow, error)
 	// 获取聊天室详情 GET /chatrooms/:roomId
-	GetChatroomByID(ctx context.Context, roomID string) (Chatroom, error)
+	GetChatroomByID(ctx context.Context, roomID string) (GetChatroomByIDRow, error)
+	GetChatroomInvitation(ctx context.Context, invitationID uuid.UUID) (ChatroomInvitation, error)
 	// =============================================
 	// 4. 成员列表查询 (Member List Queries)
 	// =============================================
@@ -444,6 +476,8 @@ type Querier interface {
 	GetChatroomOwner(ctx context.Context, roomID string) (GetChatroomOwnerRow, error)
 	// 获取聊天室详情（不含密码，用于公开展示）
 	GetChatroomWithoutPassword(ctx context.Context, roomID string) (GetChatroomWithoutPasswordRow, error)
+	// Direct conversation queries. Binding and write policies live in service/direct.
+	GetDirectPair(ctx context.Context, arg GetDirectPairParams) (DirectPair, error)
 	// =============================================
 	// 2. 反馈查询 (Feedback Queries)
 	// =============================================
@@ -486,13 +520,13 @@ type Querier interface {
 	// 获取用户的所有全局禁言记录
 	GetGlobalMuteRecordsByUser(ctx context.Context, arg GetGlobalMuteRecordsByUserParams) ([]GlobalMuteRecord, error)
 	// 获取最大的文件列表
-	GetLargestFiles(ctx context.Context, limit int64) ([]UploadedFile, error)
+	GetLargestFiles(ctx context.Context, limit int32) ([]UploadedFile, error)
 	// 获取聊天室最后一条消息
 	GetLastMessageInRoom(ctx context.Context, roomID string) (GetLastMessageInRoomRow, error)
 	// 获取最新消息
 	GetLatestMessages(ctx context.Context, arg GetLatestMessagesParams) ([]GetLatestMessagesRow, error)
 	// 通过关系ID获取成员信息
-	GetMemberByRelID(ctx context.Context, memberRelID string) (ChatroomMember, error)
+	GetMemberByRelID(ctx context.Context, memberRelID string) (GetMemberByRelIDRow, error)
 	// 获取成员最后阅读时间
 	GetMemberLastReadTime(ctx context.Context, arg GetMemberLastReadTimeParams) (sql.NullTime, error)
 	// 获取成员禁言到期时间
@@ -500,7 +534,7 @@ type Querier interface {
 	// 获取成员角色
 	GetMemberRole(ctx context.Context, arg GetMemberRoleParams) (MemberRole, error)
 	// 获取单条消息
-	GetMessageByID(ctx context.Context, messageID string) (Message, error)
+	GetMessageByID(ctx context.Context, messageID string) (GetMessageByIDRow, error)
 	// 获取消息所属聊天室ID
 	GetMessageRoom(ctx context.Context, messageID string) (string, error)
 	// 获取消息发送者ID
@@ -523,19 +557,19 @@ type Querier interface {
 	// 获取时间范围内的消息
 	GetMessagesByTimeRange(ctx context.Context, arg GetMessagesByTimeRangeParams) ([]GetMessagesByTimeRangeRow, error)
 	// 获取用户发送的消息
-	GetMessagesByUser(ctx context.Context, arg GetMessagesByUserParams) ([]Message, error)
+	GetMessagesByUser(ctx context.Context, arg GetMessagesByUserParams) ([]GetMessagesByUserRow, error)
 	// 获取用户在指定聊天室发送的消息
-	GetMessagesByUserInRoom(ctx context.Context, arg GetMessagesByUserInRoomParams) ([]Message, error)
+	GetMessagesByUserInRoom(ctx context.Context, arg GetMessagesByUserInRoomParams) ([]GetMessagesByUserInRoomRow, error)
 	// 获取引用了指定消息的消息列表
 	GetMessagesQuotingThis(ctx context.Context, quotedMessageID sql.NullString) ([]GetMessagesQuotingThisRow, error)
 	// 获取提交反馈最多的用户
-	GetMostActiveFeedbackUsers(ctx context.Context, limit int64) ([]GetMostActiveFeedbackUsersRow, error)
+	GetMostActiveFeedbackUsers(ctx context.Context, limit int32) ([]GetMostActiveFeedbackUsersRow, error)
 	// 获取上传文件最多的用户
-	GetMostActiveUploaders(ctx context.Context, limit int64) ([]GetMostActiveUploadersRow, error)
+	GetMostActiveUploaders(ctx context.Context, limit int32) ([]GetMostActiveUploadersRow, error)
 	// 获取被举报次数最多的消息
-	GetMostReportedMessages(ctx context.Context, limit int64) ([]GetMostReportedMessagesRow, error)
+	GetMostReportedMessages(ctx context.Context, limit int32) ([]GetMostReportedMessagesRow, error)
 	// 获取被举报次数最多的用户
-	GetMostReportedUsers(ctx context.Context, limit int64) ([]GetMostReportedUsersRow, error)
+	GetMostReportedUsers(ctx context.Context, limit int32) ([]GetMostReportedUsersRow, error)
 	// 获取禁言记录
 	GetMuteRecordByID(ctx context.Context, muteRecordID string) (MuteRecord, error)
 	// 获取成员的所有禁言记录
@@ -564,7 +598,7 @@ type Querier interface {
 	// 获取在线用户列表
 	GetOnlineUsers(ctx context.Context, arg GetOnlineUsersParams) ([]GetOnlineUsersRow, error)
 	// 获取各操作员的操作统计
-	GetOperatorStats(ctx context.Context, limit int64) ([]GetOperatorStatsRow, error)
+	GetOperatorStats(ctx context.Context, limit int32) ([]GetOperatorStatsRow, error)
 	// 获取待处理的收到的好友请求
 	GetPendingReceivedRequests(ctx context.Context, arg GetPendingReceivedRequestsParams) ([]GetPendingReceivedRequestsRow, error)
 	// 获取待处理的举报（管理员使用）
@@ -601,7 +635,7 @@ type Querier interface {
 	// 按目标类型获取举报列表（管理员使用）
 	GetReportsByTargetType(ctx context.Context, arg GetReportsByTargetTypeParams) ([]GetReportsByTargetTypeRow, error)
 	// 获取聊天室文件占用的存储空间大小
-	GetRoomStorageSize(ctx context.Context, relatedRoomID sql.NullString) (sql.NullString, error)
+	GetRoomStorageSize(ctx context.Context, relatedRoomID sql.NullString) (interface{}, error)
 	// 获取允许通过邮箱搜索的用户
 	GetSearchableUsersByEmail(ctx context.Context, email sql.NullString) ([]GetSearchableUsersByEmailRow, error)
 	// 获取允许通过手机号搜索的用户
@@ -609,7 +643,7 @@ type Querier interface {
 	// 获取发送的好友请求 GET /users/me/friend-requests?type=sent
 	GetSentFriendRequests(ctx context.Context, arg GetSentFriendRequestsParams) ([]GetSentFriendRequestsRow, error)
 	// 获取系统总存储空间使用
-	GetTotalStorageSize(ctx context.Context) (sql.NullString, error)
+	GetTotalStorageSize(ctx context.Context) (interface{}, error)
 	// 获取未读消息数量
 	GetUnreadMessageCount(ctx context.Context, arg GetUnreadMessageCountParams) (int64, error)
 	// 获取未读消息列表
@@ -627,7 +661,7 @@ type Querier interface {
 	// 用户登录时通过用户名查找 POST /auth/login
 	GetUserByUsername(ctx context.Context, username string) (User, error)
 	// 获取用户在聊天室的成员信息 GET /chatrooms/:roomId/members/:userId
-	GetUserChatroomMembership(ctx context.Context, arg GetUserChatroomMembershipParams) (ChatroomMember, error)
+	GetUserChatroomMembership(ctx context.Context, arg GetUserChatroomMembershipParams) (GetUserChatroomMembershipRow, error)
 	// 获取用户全局禁言到期时间
 	GetUserGlobalMuteExpireTime(ctx context.Context, mutedUserID string) (time.Time, error)
 	// 获取用户最新的头像
@@ -647,7 +681,7 @@ type Querier interface {
 	// 获取用户设置 GET /users/me/settings
 	GetUserSettings(ctx context.Context, userID string) (UserSetting, error)
 	// 获取用户已使用的存储空间大小
-	GetUserStorageSize(ctx context.Context, uploaderID string) (sql.NullString, error)
+	GetUserStorageSize(ctx context.Context, uploaderID string) (interface{}, error)
 	// 获取用户系统角色
 	GetUserSystemRole(ctx context.Context, userID string) (NullUserSystemRole, error)
 	// 获取用户在所有聊天室的未读消息数
@@ -662,13 +696,23 @@ type Querier interface {
 	// =============================================
 	// 获取允许接收好友请求的用户ID列表
 	GetUsersWithFriendRequestEnabled(ctx context.Context, dollar_1 []string) ([]string, error)
+	GroupActiveMembers(ctx context.Context, roomID string) ([]string, error)
+	GroupManagers(ctx context.Context, roomID string) ([]string, error)
 	// =============================================
 	// 8. 聊天室统计 (Chatroom Statistics)
 	// =============================================
 	// 增加成员计数
-	IncrementChatroomMemberCount(ctx context.Context, roomID string) error
+	IncrementChatroomMemberCount(ctx context.Context, dollar_1 string) error
 	// 增加在线人数
-	IncrementChatroomOnlineCount(ctx context.Context, roomID string) error
+	IncrementChatroomOnlineCount(ctx context.Context, dollar_1 string) error
+	InsertDirectMessage(ctx context.Context, arg InsertDirectMessageParams) (Message, error)
+	InvalidateFriendInvitations(ctx context.Context, arg InvalidateFriendInvitationsParams) ([]ChatroomInvitation, error)
+	InvalidateMemberInvitations(ctx context.Context, arg InvalidateMemberInvitationsParams) ([]ChatroomInvitation, error)
+	InvalidateRoomInvitations(ctx context.Context, roomID string) ([]ChatroomInvitation, error)
+	InvalidateUnauthorizedInvitations(ctx context.Context, roomID string) ([]ChatroomInvitation, error)
+	InvitableRooms(ctx context.Context, arg InvitableRoomsParams) ([]Chatroom, error)
+	InvitationClock(ctx context.Context) (time.Time, error)
+	InvitationList(ctx context.Context, arg InvitationListParams) ([]InvitationListRow, error)
 	// 检查聊天室是否为公开
 	IsChatroomPublic(ctx context.Context, roomID string) (bool, error)
 	// 检查是否是好友
@@ -703,9 +747,12 @@ type Querier interface {
 	// 3. 聊天室成员操作 (Member Operations)
 	// =============================================
 	// 加入聊天室 POST /chatrooms/:roomId/join
-	JoinChatroom(ctx context.Context, arg JoinChatroomParams) (ChatroomMember, error)
+	JoinChatroom(ctx context.Context, arg JoinChatroomParams) (JoinChatroomRow, error)
 	// 踢出成员 POST /chatrooms/:roomId/members/:userId/kick
 	KickMember(ctx context.Context, arg KickMemberParams) error
+	LatestDirectMessage(ctx context.Context, roomID string) (Message, error)
+	LatestInvitation(ctx context.Context, arg LatestInvitationParams) (ChatroomInvitation, error)
+	LatestSocialRequest(ctx context.Context, arg LatestSocialRequestParams) (FriendRequest, error)
 	// 退出聊天室 POST /chatrooms/:roomId/leave
 	LeaveChatroom(ctx context.Context, arg LeaveChatroomParams) error
 	// 获取公开聊天室列表
@@ -715,6 +762,12 @@ type Querier interface {
 	// =============================================
 	// 获取用户的聊天室列表 GET /users/me/chatrooms
 	ListUserChatrooms(ctx context.Context, arg ListUserChatroomsParams) ([]ListUserChatroomsRow, error)
+	LockDirectRoom(ctx context.Context, roomID string) (DirectPair, error)
+	LockFreeGroupRoom(ctx context.Context, roomID string) (Chatroom, error)
+	LockGroupRoom(ctx context.Context, roomID string) (Chatroom, error)
+	LockInvitation(ctx context.Context, invitationID uuid.UUID) (ChatroomInvitation, error)
+	LockSocialPair(ctx context.Context, arg LockSocialPairParams) ([]string, error)
+	LockSocialRequest(ctx context.Context, requestID string) (FriendRequest, error)
 	// 标记所有通知已读 POST /users/me/notifications/read-all
 	MarkAllNotificationsAsRead(ctx context.Context, userID string) error
 	// 标记反馈为已关闭
@@ -742,12 +795,15 @@ type Querier interface {
 	// =============================================
 	// 禁言成员 POST /chatrooms/:roomId/members/:userId/mute
 	MuteMember(ctx context.Context, arg MuteMemberParams) error
+	PendingInvitation(ctx context.Context, arg PendingInvitationParams) (ChatroomInvitation, error)
+	RecordDirectChange(ctx context.Context, arg RecordDirectChangeParams) error
 	// 拒绝好友请求 POST /friends/request/:requestId/handle
 	RejectFriendRequest(ctx context.Context, arg RejectFriendRequestParams) (FriendRequest, error)
 	// 拒绝举报
 	RejectReport(ctx context.Context, arg RejectReportParams) (Report, error)
 	// 取消管理员 POST /chatrooms/:roomId/members/:userId/remove-admin
 	RemoveMemberAdmin(ctx context.Context, arg RemoveMemberAdminParams) error
+	ResetDeletedGroupCounts(ctx context.Context, roomID string) error
 	// =============================================
 	// 3. 举报处理 (Report Handling)
 	// =============================================
@@ -768,6 +824,7 @@ type Querier interface {
 	// =============================================
 	// 在聊天室中搜索消息
 	SearchMessagesInRoom(ctx context.Context, arg SearchMessagesInRoomParams) ([]SearchMessagesInRoomRow, error)
+	SearchSocialUser(ctx context.Context, arg SearchSocialUserParams) ([]string, error)
 	// =============================================
 	// 4. 用户搜索 (User Search)
 	// =============================================
@@ -780,6 +837,7 @@ type Querier interface {
 	// =============================================
 	// 设置成员角色 POST /chatrooms/:roomId/members/:userId/set-admin
 	SetMemberRole(ctx context.Context, arg SetMemberRoleParams) error
+	SetSocialRequestStatus(ctx context.Context, arg SetSocialRequestStatusParams) (FriendRequest, error)
 	// 设置用户离线（退出登录时调用）
 	SetUserOffline(ctx context.Context, userID string) error
 	// 设置用户在线（登录时调用）
@@ -788,14 +846,20 @@ type Querier interface {
 	SetUserSystemRole(ctx context.Context, arg SetUserSystemRoleParams) error
 	// 检查用户是否显示在线状态
 	ShouldShowOnlineStatus(ctx context.Context, userID string) (bool, error)
+	SocialFriendList(ctx context.Context, arg SocialFriendListParams) ([]SocialFriendListRow, error)
+	SocialFriendSince(ctx context.Context, arg SocialFriendSinceParams) (time.Time, error)
+	SocialProfile(ctx context.Context, userID string) (SocialProfileRow, error)
+	SocialRequestList(ctx context.Context, arg SocialRequestListParams) ([]SocialRequestListRow, error)
+	StaleInvitations(ctx context.Context, limit int32) ([]ChatroomInvitation, error)
 	// 封禁用户账号（管理员操作）
 	SuspendUser(ctx context.Context, userID string) error
-	// 同步成员计数（用于数据修复）
-	SyncChatroomMemberCount(ctx context.Context, dollar_1 sql.NullString) error
-	// 同步在线人数（用于数据修复）
-	SyncChatroomOnlineCount(ctx context.Context, dollar_1 sql.NullString) error
+	SyncChatroomMemberCount(ctx context.Context, roomID string) error
+	SyncChatroomOnlineCount(ctx context.Context, roomID string) error
+	TotalDirectUnread(ctx context.Context, viewerID string) (int64, error)
+	TouchDirectRoom(ctx context.Context, roomID string) error
 	// 转让房主
 	TransferOwnership(ctx context.Context, arg TransferOwnershipParams) error
+	TransitionInvitation(ctx context.Context, arg TransitionInvitationParams) (ChatroomInvitation, error)
 	// 解除禁言 POST /chatrooms/:roomId/members/:userId/unmute
 	UnmuteMember(ctx context.Context, arg UnmuteMemberParams) error
 	// =============================================
@@ -804,9 +868,9 @@ type Querier interface {
 	// 更新账号状态（管理员操作）
 	UpdateAccountStatus(ctx context.Context, arg UpdateAccountStatusParams) error
 	// 更新聊天室信息 PUT /chatrooms/:roomId
-	UpdateChatroom(ctx context.Context, arg UpdateChatroomParams) (Chatroom, error)
+	UpdateChatroom(ctx context.Context, arg UpdateChatroomParams) (UpdateChatroomRow, error)
 	// 更新最后活跃时间
-	UpdateChatroomLastActiveTime(ctx context.Context, roomID string) error
+	UpdateChatroomLastActiveTime(ctx context.Context, dollar_1 string) error
 	// =============================================
 	// 3. 反馈状态管理 (Feedback Status Management)
 	// =============================================
@@ -817,10 +881,9 @@ type Querier interface {
 	// =============================================
 	// 更新最后阅读时间 POST /chatrooms/:roomId/messages/read
 	UpdateMemberLastReadTime(ctx context.Context, arg UpdateMemberLastReadTimeParams) error
-	// 更新最后阅读到指定消息
 	UpdateMemberLastReadToMessage(ctx context.Context, arg UpdateMemberLastReadToMessageParams) error
 	// 编辑消息 PUT /chatrooms/:roomId/messages/:messageId
-	UpdateMessage(ctx context.Context, arg UpdateMessageParams) (Message, error)
+	UpdateMessage(ctx context.Context, arg UpdateMessageParams) (UpdateMessageRow, error)
 	// 更新通知设置
 	UpdateNotificationSettings(ctx context.Context, arg UpdateNotificationSettingsParams) error
 	// 更新隐私设置
@@ -845,6 +908,7 @@ type Querier interface {
 	UpdateUserSettings(ctx context.Context, arg UpdateUserSettingsParams) (UserSetting, error)
 	// 验证聊天室密码
 	VerifyChatroomPassword(ctx context.Context, arg VerifyChatroomPasswordParams) (bool, error)
+	WithdrawDirectMessage(ctx context.Context, arg WithdrawDirectMessageParams) (Message, error)
 }
 
 var _ Querier = (*Queries)(nil)

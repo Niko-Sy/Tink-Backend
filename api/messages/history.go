@@ -3,7 +3,6 @@ package messages
 import (
 	sqlcdb "chatroombackend/db"
 	"context"
-	"database/sql"
 	"net/http"
 	"strconv"
 	"time"
@@ -76,9 +75,9 @@ func HandleGetMessageHistory(c *gin.Context) {
 	// 如果指定了 before 参数，使用游标分页（推荐用于加载历史消息）
 	if beforeMsgID != "" {
 		beforeMessages, err := queries.GetMessagesBefore(ctx, sqlcdb.GetMessagesBeforeParams{
-			Column1: sql.NullString{String: roomID, Valid: true},
-			Column2: sql.NullString{String: beforeMsgID, Valid: true},
-			Column3: sql.NullInt64{Int64: int64(pageSize), Valid: true},
+			RoomID:    roomID,
+			MessageID: beforeMsgID,
+			Limit:     int32(pageSize),
 		})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": "获取消息失败", "error": err.Error()})
@@ -105,8 +104,8 @@ func HandleGetMessageHistory(c *gin.Context) {
 		offset := int64((page - 1) * pageSize)
 		messages, err = queries.GetMessagesByRoom(ctx, sqlcdb.GetMessagesByRoomParams{
 			RoomID: roomID,
-			Limit:  int64(pageSize),
-			Offset: offset,
+			Limit:  int32(pageSize),
+			Offset: int32(offset),
 		})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": "获取消息失败", "error": err.Error()})

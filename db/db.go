@@ -30,6 +30,15 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.activateUserStmt, err = db.PrepareContext(ctx, activateUser); err != nil {
 		return nil, fmt.Errorf("error preparing query ActivateUser: %w", err)
 	}
+	if q.advanceDirectCountersStmt, err = db.PrepareContext(ctx, advanceDirectCounters); err != nil {
+		return nil, fmt.Errorf("error preparing query AdvanceDirectCounters: %w", err)
+	}
+	if q.advanceDirectReadStmt, err = db.PrepareContext(ctx, advanceDirectRead); err != nil {
+		return nil, fmt.Errorf("error preparing query AdvanceDirectRead: %w", err)
+	}
+	if q.advanceDirectRevisionStmt, err = db.PrepareContext(ctx, advanceDirectRevision); err != nil {
+		return nil, fmt.Errorf("error preparing query AdvanceDirectRevision: %w", err)
+	}
 	if q.archiveChatroomStmt, err = db.PrepareContext(ctx, archiveChatroom); err != nil {
 		return nil, fmt.Errorf("error preparing query ArchiveChatroom: %w", err)
 	}
@@ -53,6 +62,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	}
 	if q.clearExpiredMutesStmt, err = db.PrepareContext(ctx, clearExpiredMutes); err != nil {
 		return nil, fmt.Errorf("error preparing query ClearExpiredMutes: %w", err)
+	}
+	if q.conversationKindStmt, err = db.PrepareContext(ctx, conversationKind); err != nil {
+		return nil, fmt.Errorf("error preparing query ConversationKind: %w", err)
 	}
 	if q.countAdminLogsStmt, err = db.PrepareContext(ctx, countAdminLogs); err != nil {
 		return nil, fmt.Errorf("error preparing query CountAdminLogs: %w", err)
@@ -90,6 +102,18 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.countFriendsStmt, err = db.PrepareContext(ctx, countFriends); err != nil {
 		return nil, fmt.Errorf("error preparing query CountFriends: %w", err)
 	}
+	if q.countInvitableRoomsStmt, err = db.PrepareContext(ctx, countInvitableRooms); err != nil {
+		return nil, fmt.Errorf("error preparing query CountInvitableRooms: %w", err)
+	}
+	if q.countInvitationListStmt, err = db.PrepareContext(ctx, countInvitationList); err != nil {
+		return nil, fmt.Errorf("error preparing query CountInvitationList: %w", err)
+	}
+	if q.countInvitationsMinuteStmt, err = db.PrepareContext(ctx, countInvitationsMinute); err != nil {
+		return nil, fmt.Errorf("error preparing query CountInvitationsMinute: %w", err)
+	}
+	if q.countInvitationsTodayStmt, err = db.PrepareContext(ctx, countInvitationsToday); err != nil {
+		return nil, fmt.Errorf("error preparing query CountInvitationsToday: %w", err)
+	}
 	if q.countMessagesInRoomStmt, err = db.PrepareContext(ctx, countMessagesInRoom); err != nil {
 		return nil, fmt.Errorf("error preparing query CountMessagesInRoom: %w", err)
 	}
@@ -104,6 +128,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	}
 	if q.countOnlineUsersStmt, err = db.PrepareContext(ctx, countOnlineUsers); err != nil {
 		return nil, fmt.Errorf("error preparing query CountOnlineUsers: %w", err)
+	}
+	if q.countPendingInvitationsStmt, err = db.PrepareContext(ctx, countPendingInvitations); err != nil {
+		return nil, fmt.Errorf("error preparing query CountPendingInvitations: %w", err)
 	}
 	if q.countPendingReceivedRequestsStmt, err = db.PrepareContext(ctx, countPendingReceivedRequests); err != nil {
 		return nil, fmt.Errorf("error preparing query CountPendingReceivedRequests: %w", err)
@@ -131,6 +158,15 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	}
 	if q.countSentFriendRequestsStmt, err = db.PrepareContext(ctx, countSentFriendRequests); err != nil {
 		return nil, fmt.Errorf("error preparing query CountSentFriendRequests: %w", err)
+	}
+	if q.countSocialFriendListStmt, err = db.PrepareContext(ctx, countSocialFriendList); err != nil {
+		return nil, fmt.Errorf("error preparing query CountSocialFriendList: %w", err)
+	}
+	if q.countSocialRequestListStmt, err = db.PrepareContext(ctx, countSocialRequestList); err != nil {
+		return nil, fmt.Errorf("error preparing query CountSocialRequestList: %w", err)
+	}
+	if q.countSocialRequestsTodayStmt, err = db.PrepareContext(ctx, countSocialRequestsToday); err != nil {
+		return nil, fmt.Errorf("error preparing query CountSocialRequestsToday: %w", err)
 	}
 	if q.countUnreadNotificationsStmt, err = db.PrepareContext(ctx, countUnreadNotifications); err != nil {
 		return nil, fmt.Errorf("error preparing query CountUnreadNotifications: %w", err)
@@ -171,6 +207,12 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.createDeleteMessageLogStmt, err = db.PrepareContext(ctx, createDeleteMessageLog); err != nil {
 		return nil, fmt.Errorf("error preparing query CreateDeleteMessageLog: %w", err)
 	}
+	if q.createDirectPairStmt, err = db.PrepareContext(ctx, createDirectPair); err != nil {
+		return nil, fmt.Errorf("error preparing query CreateDirectPair: %w", err)
+	}
+	if q.createDirectRoomStmt, err = db.PrepareContext(ctx, createDirectRoom); err != nil {
+		return nil, fmt.Errorf("error preparing query CreateDirectRoom: %w", err)
+	}
 	if q.createFeatureRequestStmt, err = db.PrepareContext(ctx, createFeatureRequest); err != nil {
 		return nil, fmt.Errorf("error preparing query CreateFeatureRequest: %w", err)
 	}
@@ -191,6 +233,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	}
 	if q.createGlobalMuteRecordStmt, err = db.PrepareContext(ctx, createGlobalMuteRecord); err != nil {
 		return nil, fmt.Errorf("error preparing query CreateGlobalMuteRecord: %w", err)
+	}
+	if q.createInvitationStmt, err = db.PrepareContext(ctx, createInvitation); err != nil {
+		return nil, fmt.Errorf("error preparing query CreateInvitation: %w", err)
 	}
 	if q.createKickLogStmt, err = db.PrepareContext(ctx, createKickLog); err != nil {
 		return nil, fmt.Errorf("error preparing query CreateKickLog: %w", err)
@@ -236,6 +281,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	}
 	if q.deactivateGlobalMuteRecordByIDStmt, err = db.PrepareContext(ctx, deactivateGlobalMuteRecordByID); err != nil {
 		return nil, fmt.Errorf("error preparing query DeactivateGlobalMuteRecordByID: %w", err)
+	}
+	if q.deactivateGroupMembersStmt, err = db.PrepareContext(ctx, deactivateGroupMembers); err != nil {
+		return nil, fmt.Errorf("error preparing query DeactivateGroupMembers: %w", err)
 	}
 	if q.deactivateMuteRecordStmt, err = db.PrepareContext(ctx, deactivateMuteRecord); err != nil {
 		return nil, fmt.Errorf("error preparing query DeactivateMuteRecord: %w", err)
@@ -303,8 +351,47 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.deleteUserSettingsStmt, err = db.PrepareContext(ctx, deleteUserSettings); err != nil {
 		return nil, fmt.Errorf("error preparing query DeleteUserSettings: %w", err)
 	}
+	if q.directActivityStmt, err = db.PrepareContext(ctx, directActivity); err != nil {
+		return nil, fmt.Errorf("error preparing query DirectActivity: %w", err)
+	}
+	if q.directChangesStmt, err = db.PrepareContext(ctx, directChanges); err != nil {
+		return nil, fmt.Errorf("error preparing query DirectChanges: %w", err)
+	}
+	if q.directConversationListStmt, err = db.PrepareContext(ctx, directConversationList); err != nil {
+		return nil, fmt.Errorf("error preparing query DirectConversationList: %w", err)
+	}
+	if q.directHistoryAfterStmt, err = db.PrepareContext(ctx, directHistoryAfter); err != nil {
+		return nil, fmt.Errorf("error preparing query DirectHistoryAfter: %w", err)
+	}
+	if q.directHistoryBeforeStmt, err = db.PrepareContext(ctx, directHistoryBefore); err != nil {
+		return nil, fmt.Errorf("error preparing query DirectHistoryBefore: %w", err)
+	}
+	if q.directMessageByIDStmt, err = db.PrepareContext(ctx, directMessageByID); err != nil {
+		return nil, fmt.Errorf("error preparing query DirectMessageByID: %w", err)
+	}
+	if q.directMessageByKeyStmt, err = db.PrepareContext(ctx, directMessageByKey); err != nil {
+		return nil, fmt.Errorf("error preparing query DirectMessageByKey: %w", err)
+	}
+	if q.directPairByRoomStmt, err = db.PrepareContext(ctx, directPairByRoom); err != nil {
+		return nil, fmt.Errorf("error preparing query DirectPairByRoom: %w", err)
+	}
+	if q.directReadPositionStmt, err = db.PrepareContext(ctx, directReadPosition); err != nil {
+		return nil, fmt.Errorf("error preparing query DirectReadPosition: %w", err)
+	}
+	if q.directUnreadStmt, err = db.PrepareContext(ctx, directUnread); err != nil {
+		return nil, fmt.Errorf("error preparing query DirectUnread: %w", err)
+	}
+	if q.editDirectMessageStmt, err = db.PrepareContext(ctx, editDirectMessage); err != nil {
+		return nil, fmt.Errorf("error preparing query EditDirectMessage: %w", err)
+	}
+	if q.effectiveInvitationStatusStmt, err = db.PrepareContext(ctx, effectiveInvitationStatus); err != nil {
+		return nil, fmt.Errorf("error preparing query EffectiveInvitationStatus: %w", err)
+	}
 	if q.expireGlobalMuteRecordsStmt, err = db.PrepareContext(ctx, expireGlobalMuteRecords); err != nil {
 		return nil, fmt.Errorf("error preparing query ExpireGlobalMuteRecords: %w", err)
+	}
+	if q.expireInvitationsStmt, err = db.PrepareContext(ctx, expireInvitations); err != nil {
+		return nil, fmt.Errorf("error preparing query ExpireInvitations: %w", err)
 	}
 	if q.expireMuteRecordsStmt, err = db.PrepareContext(ctx, expireMuteRecords); err != nil {
 		return nil, fmt.Errorf("error preparing query ExpireMuteRecords: %w", err)
@@ -357,6 +444,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.getChatroomByIDStmt, err = db.PrepareContext(ctx, getChatroomByID); err != nil {
 		return nil, fmt.Errorf("error preparing query GetChatroomByID: %w", err)
 	}
+	if q.getChatroomInvitationStmt, err = db.PrepareContext(ctx, getChatroomInvitation); err != nil {
+		return nil, fmt.Errorf("error preparing query GetChatroomInvitation: %w", err)
+	}
 	if q.getChatroomMembersStmt, err = db.PrepareContext(ctx, getChatroomMembers); err != nil {
 		return nil, fmt.Errorf("error preparing query GetChatroomMembers: %w", err)
 	}
@@ -365,6 +455,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	}
 	if q.getChatroomWithoutPasswordStmt, err = db.PrepareContext(ctx, getChatroomWithoutPassword); err != nil {
 		return nil, fmt.Errorf("error preparing query GetChatroomWithoutPassword: %w", err)
+	}
+	if q.getDirectPairStmt, err = db.PrepareContext(ctx, getDirectPair); err != nil {
+		return nil, fmt.Errorf("error preparing query GetDirectPair: %w", err)
 	}
 	if q.getFeedbackByIDStmt, err = db.PrepareContext(ctx, getFeedbackByID); err != nil {
 		return nil, fmt.Errorf("error preparing query GetFeedbackByID: %w", err)
@@ -645,11 +738,41 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.getUsersWithFriendRequestEnabledStmt, err = db.PrepareContext(ctx, getUsersWithFriendRequestEnabled); err != nil {
 		return nil, fmt.Errorf("error preparing query GetUsersWithFriendRequestEnabled: %w", err)
 	}
+	if q.groupActiveMembersStmt, err = db.PrepareContext(ctx, groupActiveMembers); err != nil {
+		return nil, fmt.Errorf("error preparing query GroupActiveMembers: %w", err)
+	}
+	if q.groupManagersStmt, err = db.PrepareContext(ctx, groupManagers); err != nil {
+		return nil, fmt.Errorf("error preparing query GroupManagers: %w", err)
+	}
 	if q.incrementChatroomMemberCountStmt, err = db.PrepareContext(ctx, incrementChatroomMemberCount); err != nil {
 		return nil, fmt.Errorf("error preparing query IncrementChatroomMemberCount: %w", err)
 	}
 	if q.incrementChatroomOnlineCountStmt, err = db.PrepareContext(ctx, incrementChatroomOnlineCount); err != nil {
 		return nil, fmt.Errorf("error preparing query IncrementChatroomOnlineCount: %w", err)
+	}
+	if q.insertDirectMessageStmt, err = db.PrepareContext(ctx, insertDirectMessage); err != nil {
+		return nil, fmt.Errorf("error preparing query InsertDirectMessage: %w", err)
+	}
+	if q.invalidateFriendInvitationsStmt, err = db.PrepareContext(ctx, invalidateFriendInvitations); err != nil {
+		return nil, fmt.Errorf("error preparing query InvalidateFriendInvitations: %w", err)
+	}
+	if q.invalidateMemberInvitationsStmt, err = db.PrepareContext(ctx, invalidateMemberInvitations); err != nil {
+		return nil, fmt.Errorf("error preparing query InvalidateMemberInvitations: %w", err)
+	}
+	if q.invalidateRoomInvitationsStmt, err = db.PrepareContext(ctx, invalidateRoomInvitations); err != nil {
+		return nil, fmt.Errorf("error preparing query InvalidateRoomInvitations: %w", err)
+	}
+	if q.invalidateUnauthorizedInvitationsStmt, err = db.PrepareContext(ctx, invalidateUnauthorizedInvitations); err != nil {
+		return nil, fmt.Errorf("error preparing query InvalidateUnauthorizedInvitations: %w", err)
+	}
+	if q.invitableRoomsStmt, err = db.PrepareContext(ctx, invitableRooms); err != nil {
+		return nil, fmt.Errorf("error preparing query InvitableRooms: %w", err)
+	}
+	if q.invitationClockStmt, err = db.PrepareContext(ctx, invitationClock); err != nil {
+		return nil, fmt.Errorf("error preparing query InvitationClock: %w", err)
+	}
+	if q.invitationListStmt, err = db.PrepareContext(ctx, invitationList); err != nil {
+		return nil, fmt.Errorf("error preparing query InvitationList: %w", err)
 	}
 	if q.isChatroomPublicStmt, err = db.PrepareContext(ctx, isChatroomPublic); err != nil {
 		return nil, fmt.Errorf("error preparing query IsChatroomPublic: %w", err)
@@ -693,6 +816,15 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.kickMemberStmt, err = db.PrepareContext(ctx, kickMember); err != nil {
 		return nil, fmt.Errorf("error preparing query KickMember: %w", err)
 	}
+	if q.latestDirectMessageStmt, err = db.PrepareContext(ctx, latestDirectMessage); err != nil {
+		return nil, fmt.Errorf("error preparing query LatestDirectMessage: %w", err)
+	}
+	if q.latestInvitationStmt, err = db.PrepareContext(ctx, latestInvitation); err != nil {
+		return nil, fmt.Errorf("error preparing query LatestInvitation: %w", err)
+	}
+	if q.latestSocialRequestStmt, err = db.PrepareContext(ctx, latestSocialRequest); err != nil {
+		return nil, fmt.Errorf("error preparing query LatestSocialRequest: %w", err)
+	}
 	if q.leaveChatroomStmt, err = db.PrepareContext(ctx, leaveChatroom); err != nil {
 		return nil, fmt.Errorf("error preparing query LeaveChatroom: %w", err)
 	}
@@ -701,6 +833,24 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	}
 	if q.listUserChatroomsStmt, err = db.PrepareContext(ctx, listUserChatrooms); err != nil {
 		return nil, fmt.Errorf("error preparing query ListUserChatrooms: %w", err)
+	}
+	if q.lockDirectRoomStmt, err = db.PrepareContext(ctx, lockDirectRoom); err != nil {
+		return nil, fmt.Errorf("error preparing query LockDirectRoom: %w", err)
+	}
+	if q.lockFreeGroupRoomStmt, err = db.PrepareContext(ctx, lockFreeGroupRoom); err != nil {
+		return nil, fmt.Errorf("error preparing query LockFreeGroupRoom: %w", err)
+	}
+	if q.lockGroupRoomStmt, err = db.PrepareContext(ctx, lockGroupRoom); err != nil {
+		return nil, fmt.Errorf("error preparing query LockGroupRoom: %w", err)
+	}
+	if q.lockInvitationStmt, err = db.PrepareContext(ctx, lockInvitation); err != nil {
+		return nil, fmt.Errorf("error preparing query LockInvitation: %w", err)
+	}
+	if q.lockSocialPairStmt, err = db.PrepareContext(ctx, lockSocialPair); err != nil {
+		return nil, fmt.Errorf("error preparing query LockSocialPair: %w", err)
+	}
+	if q.lockSocialRequestStmt, err = db.PrepareContext(ctx, lockSocialRequest); err != nil {
+		return nil, fmt.Errorf("error preparing query LockSocialRequest: %w", err)
 	}
 	if q.markAllNotificationsAsReadStmt, err = db.PrepareContext(ctx, markAllNotificationsAsRead); err != nil {
 		return nil, fmt.Errorf("error preparing query MarkAllNotificationsAsRead: %w", err)
@@ -729,6 +879,12 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.muteMemberStmt, err = db.PrepareContext(ctx, muteMember); err != nil {
 		return nil, fmt.Errorf("error preparing query MuteMember: %w", err)
 	}
+	if q.pendingInvitationStmt, err = db.PrepareContext(ctx, pendingInvitation); err != nil {
+		return nil, fmt.Errorf("error preparing query PendingInvitation: %w", err)
+	}
+	if q.recordDirectChangeStmt, err = db.PrepareContext(ctx, recordDirectChange); err != nil {
+		return nil, fmt.Errorf("error preparing query RecordDirectChange: %w", err)
+	}
 	if q.rejectFriendRequestStmt, err = db.PrepareContext(ctx, rejectFriendRequest); err != nil {
 		return nil, fmt.Errorf("error preparing query RejectFriendRequest: %w", err)
 	}
@@ -737,6 +893,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	}
 	if q.removeMemberAdminStmt, err = db.PrepareContext(ctx, removeMemberAdmin); err != nil {
 		return nil, fmt.Errorf("error preparing query RemoveMemberAdmin: %w", err)
+	}
+	if q.resetDeletedGroupCountsStmt, err = db.PrepareContext(ctx, resetDeletedGroupCounts); err != nil {
+		return nil, fmt.Errorf("error preparing query ResetDeletedGroupCounts: %w", err)
 	}
 	if q.resolveReportStmt, err = db.PrepareContext(ctx, resolveReport); err != nil {
 		return nil, fmt.Errorf("error preparing query ResolveReport: %w", err)
@@ -759,6 +918,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.searchMessagesInRoomStmt, err = db.PrepareContext(ctx, searchMessagesInRoom); err != nil {
 		return nil, fmt.Errorf("error preparing query SearchMessagesInRoom: %w", err)
 	}
+	if q.searchSocialUserStmt, err = db.PrepareContext(ctx, searchSocialUser); err != nil {
+		return nil, fmt.Errorf("error preparing query SearchSocialUser: %w", err)
+	}
 	if q.searchUsersStmt, err = db.PrepareContext(ctx, searchUsers); err != nil {
 		return nil, fmt.Errorf("error preparing query SearchUsers: %w", err)
 	}
@@ -767,6 +929,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	}
 	if q.setMemberRoleStmt, err = db.PrepareContext(ctx, setMemberRole); err != nil {
 		return nil, fmt.Errorf("error preparing query SetMemberRole: %w", err)
+	}
+	if q.setSocialRequestStatusStmt, err = db.PrepareContext(ctx, setSocialRequestStatus); err != nil {
+		return nil, fmt.Errorf("error preparing query SetSocialRequestStatus: %w", err)
 	}
 	if q.setUserOfflineStmt, err = db.PrepareContext(ctx, setUserOffline); err != nil {
 		return nil, fmt.Errorf("error preparing query SetUserOffline: %w", err)
@@ -780,6 +945,21 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.shouldShowOnlineStatusStmt, err = db.PrepareContext(ctx, shouldShowOnlineStatus); err != nil {
 		return nil, fmt.Errorf("error preparing query ShouldShowOnlineStatus: %w", err)
 	}
+	if q.socialFriendListStmt, err = db.PrepareContext(ctx, socialFriendList); err != nil {
+		return nil, fmt.Errorf("error preparing query SocialFriendList: %w", err)
+	}
+	if q.socialFriendSinceStmt, err = db.PrepareContext(ctx, socialFriendSince); err != nil {
+		return nil, fmt.Errorf("error preparing query SocialFriendSince: %w", err)
+	}
+	if q.socialProfileStmt, err = db.PrepareContext(ctx, socialProfile); err != nil {
+		return nil, fmt.Errorf("error preparing query SocialProfile: %w", err)
+	}
+	if q.socialRequestListStmt, err = db.PrepareContext(ctx, socialRequestList); err != nil {
+		return nil, fmt.Errorf("error preparing query SocialRequestList: %w", err)
+	}
+	if q.staleInvitationsStmt, err = db.PrepareContext(ctx, staleInvitations); err != nil {
+		return nil, fmt.Errorf("error preparing query StaleInvitations: %w", err)
+	}
 	if q.suspendUserStmt, err = db.PrepareContext(ctx, suspendUser); err != nil {
 		return nil, fmt.Errorf("error preparing query SuspendUser: %w", err)
 	}
@@ -789,8 +969,17 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.syncChatroomOnlineCountStmt, err = db.PrepareContext(ctx, syncChatroomOnlineCount); err != nil {
 		return nil, fmt.Errorf("error preparing query SyncChatroomOnlineCount: %w", err)
 	}
+	if q.totalDirectUnreadStmt, err = db.PrepareContext(ctx, totalDirectUnread); err != nil {
+		return nil, fmt.Errorf("error preparing query TotalDirectUnread: %w", err)
+	}
+	if q.touchDirectRoomStmt, err = db.PrepareContext(ctx, touchDirectRoom); err != nil {
+		return nil, fmt.Errorf("error preparing query TouchDirectRoom: %w", err)
+	}
 	if q.transferOwnershipStmt, err = db.PrepareContext(ctx, transferOwnership); err != nil {
 		return nil, fmt.Errorf("error preparing query TransferOwnership: %w", err)
+	}
+	if q.transitionInvitationStmt, err = db.PrepareContext(ctx, transitionInvitation); err != nil {
+		return nil, fmt.Errorf("error preparing query TransitionInvitation: %w", err)
 	}
 	if q.unmuteMemberStmt, err = db.PrepareContext(ctx, unmuteMember); err != nil {
 		return nil, fmt.Errorf("error preparing query UnmuteMember: %w", err)
@@ -843,6 +1032,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.verifyChatroomPasswordStmt, err = db.PrepareContext(ctx, verifyChatroomPassword); err != nil {
 		return nil, fmt.Errorf("error preparing query VerifyChatroomPassword: %w", err)
 	}
+	if q.withdrawDirectMessageStmt, err = db.PrepareContext(ctx, withdrawDirectMessage); err != nil {
+		return nil, fmt.Errorf("error preparing query WithdrawDirectMessage: %w", err)
+	}
 	return &q, nil
 }
 
@@ -856,6 +1048,21 @@ func (q *Queries) Close() error {
 	if q.activateUserStmt != nil {
 		if cerr := q.activateUserStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing activateUserStmt: %w", cerr)
+		}
+	}
+	if q.advanceDirectCountersStmt != nil {
+		if cerr := q.advanceDirectCountersStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing advanceDirectCountersStmt: %w", cerr)
+		}
+	}
+	if q.advanceDirectReadStmt != nil {
+		if cerr := q.advanceDirectReadStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing advanceDirectReadStmt: %w", cerr)
+		}
+	}
+	if q.advanceDirectRevisionStmt != nil {
+		if cerr := q.advanceDirectRevisionStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing advanceDirectRevisionStmt: %w", cerr)
 		}
 	}
 	if q.archiveChatroomStmt != nil {
@@ -896,6 +1103,11 @@ func (q *Queries) Close() error {
 	if q.clearExpiredMutesStmt != nil {
 		if cerr := q.clearExpiredMutesStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing clearExpiredMutesStmt: %w", cerr)
+		}
+	}
+	if q.conversationKindStmt != nil {
+		if cerr := q.conversationKindStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing conversationKindStmt: %w", cerr)
 		}
 	}
 	if q.countAdminLogsStmt != nil {
@@ -958,6 +1170,26 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing countFriendsStmt: %w", cerr)
 		}
 	}
+	if q.countInvitableRoomsStmt != nil {
+		if cerr := q.countInvitableRoomsStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing countInvitableRoomsStmt: %w", cerr)
+		}
+	}
+	if q.countInvitationListStmt != nil {
+		if cerr := q.countInvitationListStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing countInvitationListStmt: %w", cerr)
+		}
+	}
+	if q.countInvitationsMinuteStmt != nil {
+		if cerr := q.countInvitationsMinuteStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing countInvitationsMinuteStmt: %w", cerr)
+		}
+	}
+	if q.countInvitationsTodayStmt != nil {
+		if cerr := q.countInvitationsTodayStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing countInvitationsTodayStmt: %w", cerr)
+		}
+	}
 	if q.countMessagesInRoomStmt != nil {
 		if cerr := q.countMessagesInRoomStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing countMessagesInRoomStmt: %w", cerr)
@@ -981,6 +1213,11 @@ func (q *Queries) Close() error {
 	if q.countOnlineUsersStmt != nil {
 		if cerr := q.countOnlineUsersStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing countOnlineUsersStmt: %w", cerr)
+		}
+	}
+	if q.countPendingInvitationsStmt != nil {
+		if cerr := q.countPendingInvitationsStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing countPendingInvitationsStmt: %w", cerr)
 		}
 	}
 	if q.countPendingReceivedRequestsStmt != nil {
@@ -1026,6 +1263,21 @@ func (q *Queries) Close() error {
 	if q.countSentFriendRequestsStmt != nil {
 		if cerr := q.countSentFriendRequestsStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing countSentFriendRequestsStmt: %w", cerr)
+		}
+	}
+	if q.countSocialFriendListStmt != nil {
+		if cerr := q.countSocialFriendListStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing countSocialFriendListStmt: %w", cerr)
+		}
+	}
+	if q.countSocialRequestListStmt != nil {
+		if cerr := q.countSocialRequestListStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing countSocialRequestListStmt: %w", cerr)
+		}
+	}
+	if q.countSocialRequestsTodayStmt != nil {
+		if cerr := q.countSocialRequestsTodayStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing countSocialRequestsTodayStmt: %w", cerr)
 		}
 	}
 	if q.countUnreadNotificationsStmt != nil {
@@ -1093,6 +1345,16 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing createDeleteMessageLogStmt: %w", cerr)
 		}
 	}
+	if q.createDirectPairStmt != nil {
+		if cerr := q.createDirectPairStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing createDirectPairStmt: %w", cerr)
+		}
+	}
+	if q.createDirectRoomStmt != nil {
+		if cerr := q.createDirectRoomStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing createDirectRoomStmt: %w", cerr)
+		}
+	}
 	if q.createFeatureRequestStmt != nil {
 		if cerr := q.createFeatureRequestStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing createFeatureRequestStmt: %w", cerr)
@@ -1126,6 +1388,11 @@ func (q *Queries) Close() error {
 	if q.createGlobalMuteRecordStmt != nil {
 		if cerr := q.createGlobalMuteRecordStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing createGlobalMuteRecordStmt: %w", cerr)
+		}
+	}
+	if q.createInvitationStmt != nil {
+		if cerr := q.createInvitationStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing createInvitationStmt: %w", cerr)
 		}
 	}
 	if q.createKickLogStmt != nil {
@@ -1201,6 +1468,11 @@ func (q *Queries) Close() error {
 	if q.deactivateGlobalMuteRecordByIDStmt != nil {
 		if cerr := q.deactivateGlobalMuteRecordByIDStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing deactivateGlobalMuteRecordByIDStmt: %w", cerr)
+		}
+	}
+	if q.deactivateGroupMembersStmt != nil {
+		if cerr := q.deactivateGroupMembersStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing deactivateGroupMembersStmt: %w", cerr)
 		}
 	}
 	if q.deactivateMuteRecordStmt != nil {
@@ -1313,9 +1585,74 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing deleteUserSettingsStmt: %w", cerr)
 		}
 	}
+	if q.directActivityStmt != nil {
+		if cerr := q.directActivityStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing directActivityStmt: %w", cerr)
+		}
+	}
+	if q.directChangesStmt != nil {
+		if cerr := q.directChangesStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing directChangesStmt: %w", cerr)
+		}
+	}
+	if q.directConversationListStmt != nil {
+		if cerr := q.directConversationListStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing directConversationListStmt: %w", cerr)
+		}
+	}
+	if q.directHistoryAfterStmt != nil {
+		if cerr := q.directHistoryAfterStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing directHistoryAfterStmt: %w", cerr)
+		}
+	}
+	if q.directHistoryBeforeStmt != nil {
+		if cerr := q.directHistoryBeforeStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing directHistoryBeforeStmt: %w", cerr)
+		}
+	}
+	if q.directMessageByIDStmt != nil {
+		if cerr := q.directMessageByIDStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing directMessageByIDStmt: %w", cerr)
+		}
+	}
+	if q.directMessageByKeyStmt != nil {
+		if cerr := q.directMessageByKeyStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing directMessageByKeyStmt: %w", cerr)
+		}
+	}
+	if q.directPairByRoomStmt != nil {
+		if cerr := q.directPairByRoomStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing directPairByRoomStmt: %w", cerr)
+		}
+	}
+	if q.directReadPositionStmt != nil {
+		if cerr := q.directReadPositionStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing directReadPositionStmt: %w", cerr)
+		}
+	}
+	if q.directUnreadStmt != nil {
+		if cerr := q.directUnreadStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing directUnreadStmt: %w", cerr)
+		}
+	}
+	if q.editDirectMessageStmt != nil {
+		if cerr := q.editDirectMessageStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing editDirectMessageStmt: %w", cerr)
+		}
+	}
+	if q.effectiveInvitationStatusStmt != nil {
+		if cerr := q.effectiveInvitationStatusStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing effectiveInvitationStatusStmt: %w", cerr)
+		}
+	}
 	if q.expireGlobalMuteRecordsStmt != nil {
 		if cerr := q.expireGlobalMuteRecordsStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing expireGlobalMuteRecordsStmt: %w", cerr)
+		}
+	}
+	if q.expireInvitationsStmt != nil {
+		if cerr := q.expireInvitationsStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing expireInvitationsStmt: %w", cerr)
 		}
 	}
 	if q.expireMuteRecordsStmt != nil {
@@ -1403,6 +1740,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing getChatroomByIDStmt: %w", cerr)
 		}
 	}
+	if q.getChatroomInvitationStmt != nil {
+		if cerr := q.getChatroomInvitationStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getChatroomInvitationStmt: %w", cerr)
+		}
+	}
 	if q.getChatroomMembersStmt != nil {
 		if cerr := q.getChatroomMembersStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getChatroomMembersStmt: %w", cerr)
@@ -1416,6 +1758,11 @@ func (q *Queries) Close() error {
 	if q.getChatroomWithoutPasswordStmt != nil {
 		if cerr := q.getChatroomWithoutPasswordStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getChatroomWithoutPasswordStmt: %w", cerr)
+		}
+	}
+	if q.getDirectPairStmt != nil {
+		if cerr := q.getDirectPairStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getDirectPairStmt: %w", cerr)
 		}
 	}
 	if q.getFeedbackByIDStmt != nil {
@@ -1883,6 +2230,16 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing getUsersWithFriendRequestEnabledStmt: %w", cerr)
 		}
 	}
+	if q.groupActiveMembersStmt != nil {
+		if cerr := q.groupActiveMembersStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing groupActiveMembersStmt: %w", cerr)
+		}
+	}
+	if q.groupManagersStmt != nil {
+		if cerr := q.groupManagersStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing groupManagersStmt: %w", cerr)
+		}
+	}
 	if q.incrementChatroomMemberCountStmt != nil {
 		if cerr := q.incrementChatroomMemberCountStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing incrementChatroomMemberCountStmt: %w", cerr)
@@ -1891,6 +2248,46 @@ func (q *Queries) Close() error {
 	if q.incrementChatroomOnlineCountStmt != nil {
 		if cerr := q.incrementChatroomOnlineCountStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing incrementChatroomOnlineCountStmt: %w", cerr)
+		}
+	}
+	if q.insertDirectMessageStmt != nil {
+		if cerr := q.insertDirectMessageStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing insertDirectMessageStmt: %w", cerr)
+		}
+	}
+	if q.invalidateFriendInvitationsStmt != nil {
+		if cerr := q.invalidateFriendInvitationsStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing invalidateFriendInvitationsStmt: %w", cerr)
+		}
+	}
+	if q.invalidateMemberInvitationsStmt != nil {
+		if cerr := q.invalidateMemberInvitationsStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing invalidateMemberInvitationsStmt: %w", cerr)
+		}
+	}
+	if q.invalidateRoomInvitationsStmt != nil {
+		if cerr := q.invalidateRoomInvitationsStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing invalidateRoomInvitationsStmt: %w", cerr)
+		}
+	}
+	if q.invalidateUnauthorizedInvitationsStmt != nil {
+		if cerr := q.invalidateUnauthorizedInvitationsStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing invalidateUnauthorizedInvitationsStmt: %w", cerr)
+		}
+	}
+	if q.invitableRoomsStmt != nil {
+		if cerr := q.invitableRoomsStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing invitableRoomsStmt: %w", cerr)
+		}
+	}
+	if q.invitationClockStmt != nil {
+		if cerr := q.invitationClockStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing invitationClockStmt: %w", cerr)
+		}
+	}
+	if q.invitationListStmt != nil {
+		if cerr := q.invitationListStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing invitationListStmt: %w", cerr)
 		}
 	}
 	if q.isChatroomPublicStmt != nil {
@@ -1963,6 +2360,21 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing kickMemberStmt: %w", cerr)
 		}
 	}
+	if q.latestDirectMessageStmt != nil {
+		if cerr := q.latestDirectMessageStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing latestDirectMessageStmt: %w", cerr)
+		}
+	}
+	if q.latestInvitationStmt != nil {
+		if cerr := q.latestInvitationStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing latestInvitationStmt: %w", cerr)
+		}
+	}
+	if q.latestSocialRequestStmt != nil {
+		if cerr := q.latestSocialRequestStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing latestSocialRequestStmt: %w", cerr)
+		}
+	}
 	if q.leaveChatroomStmt != nil {
 		if cerr := q.leaveChatroomStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing leaveChatroomStmt: %w", cerr)
@@ -1976,6 +2388,36 @@ func (q *Queries) Close() error {
 	if q.listUserChatroomsStmt != nil {
 		if cerr := q.listUserChatroomsStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing listUserChatroomsStmt: %w", cerr)
+		}
+	}
+	if q.lockDirectRoomStmt != nil {
+		if cerr := q.lockDirectRoomStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing lockDirectRoomStmt: %w", cerr)
+		}
+	}
+	if q.lockFreeGroupRoomStmt != nil {
+		if cerr := q.lockFreeGroupRoomStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing lockFreeGroupRoomStmt: %w", cerr)
+		}
+	}
+	if q.lockGroupRoomStmt != nil {
+		if cerr := q.lockGroupRoomStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing lockGroupRoomStmt: %w", cerr)
+		}
+	}
+	if q.lockInvitationStmt != nil {
+		if cerr := q.lockInvitationStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing lockInvitationStmt: %w", cerr)
+		}
+	}
+	if q.lockSocialPairStmt != nil {
+		if cerr := q.lockSocialPairStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing lockSocialPairStmt: %w", cerr)
+		}
+	}
+	if q.lockSocialRequestStmt != nil {
+		if cerr := q.lockSocialRequestStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing lockSocialRequestStmt: %w", cerr)
 		}
 	}
 	if q.markAllNotificationsAsReadStmt != nil {
@@ -2023,6 +2465,16 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing muteMemberStmt: %w", cerr)
 		}
 	}
+	if q.pendingInvitationStmt != nil {
+		if cerr := q.pendingInvitationStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing pendingInvitationStmt: %w", cerr)
+		}
+	}
+	if q.recordDirectChangeStmt != nil {
+		if cerr := q.recordDirectChangeStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing recordDirectChangeStmt: %w", cerr)
+		}
+	}
 	if q.rejectFriendRequestStmt != nil {
 		if cerr := q.rejectFriendRequestStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing rejectFriendRequestStmt: %w", cerr)
@@ -2036,6 +2488,11 @@ func (q *Queries) Close() error {
 	if q.removeMemberAdminStmt != nil {
 		if cerr := q.removeMemberAdminStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing removeMemberAdminStmt: %w", cerr)
+		}
+	}
+	if q.resetDeletedGroupCountsStmt != nil {
+		if cerr := q.resetDeletedGroupCountsStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing resetDeletedGroupCountsStmt: %w", cerr)
 		}
 	}
 	if q.resolveReportStmt != nil {
@@ -2073,6 +2530,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing searchMessagesInRoomStmt: %w", cerr)
 		}
 	}
+	if q.searchSocialUserStmt != nil {
+		if cerr := q.searchSocialUserStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing searchSocialUserStmt: %w", cerr)
+		}
+	}
 	if q.searchUsersStmt != nil {
 		if cerr := q.searchUsersStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing searchUsersStmt: %w", cerr)
@@ -2086,6 +2548,11 @@ func (q *Queries) Close() error {
 	if q.setMemberRoleStmt != nil {
 		if cerr := q.setMemberRoleStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing setMemberRoleStmt: %w", cerr)
+		}
+	}
+	if q.setSocialRequestStatusStmt != nil {
+		if cerr := q.setSocialRequestStatusStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing setSocialRequestStatusStmt: %w", cerr)
 		}
 	}
 	if q.setUserOfflineStmt != nil {
@@ -2108,6 +2575,31 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing shouldShowOnlineStatusStmt: %w", cerr)
 		}
 	}
+	if q.socialFriendListStmt != nil {
+		if cerr := q.socialFriendListStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing socialFriendListStmt: %w", cerr)
+		}
+	}
+	if q.socialFriendSinceStmt != nil {
+		if cerr := q.socialFriendSinceStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing socialFriendSinceStmt: %w", cerr)
+		}
+	}
+	if q.socialProfileStmt != nil {
+		if cerr := q.socialProfileStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing socialProfileStmt: %w", cerr)
+		}
+	}
+	if q.socialRequestListStmt != nil {
+		if cerr := q.socialRequestListStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing socialRequestListStmt: %w", cerr)
+		}
+	}
+	if q.staleInvitationsStmt != nil {
+		if cerr := q.staleInvitationsStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing staleInvitationsStmt: %w", cerr)
+		}
+	}
 	if q.suspendUserStmt != nil {
 		if cerr := q.suspendUserStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing suspendUserStmt: %w", cerr)
@@ -2123,9 +2615,24 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing syncChatroomOnlineCountStmt: %w", cerr)
 		}
 	}
+	if q.totalDirectUnreadStmt != nil {
+		if cerr := q.totalDirectUnreadStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing totalDirectUnreadStmt: %w", cerr)
+		}
+	}
+	if q.touchDirectRoomStmt != nil {
+		if cerr := q.touchDirectRoomStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing touchDirectRoomStmt: %w", cerr)
+		}
+	}
 	if q.transferOwnershipStmt != nil {
 		if cerr := q.transferOwnershipStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing transferOwnershipStmt: %w", cerr)
+		}
+	}
+	if q.transitionInvitationStmt != nil {
+		if cerr := q.transitionInvitationStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing transitionInvitationStmt: %w", cerr)
 		}
 	}
 	if q.unmuteMemberStmt != nil {
@@ -2213,6 +2720,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing verifyChatroomPasswordStmt: %w", cerr)
 		}
 	}
+	if q.withdrawDirectMessageStmt != nil {
+		if cerr := q.withdrawDirectMessageStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing withdrawDirectMessageStmt: %w", cerr)
+		}
+	}
 	return err
 }
 
@@ -2250,559 +2762,687 @@ func (q *Queries) queryRow(ctx context.Context, stmt *sql.Stmt, query string, ar
 }
 
 type Queries struct {
-	db                                   DBTX
-	tx                                   *sql.Tx
-	acceptFriendRequestStmt              *sql.Stmt
-	activateUserStmt                     *sql.Stmt
-	archiveChatroomStmt                  *sql.Stmt
-	canUserSendMessageInRoomStmt         *sql.Stmt
-	cancelFriendRequestStmt              *sql.Stmt
-	checkDuplicateReportStmt             *sql.Stmt
-	checkEmailExistsStmt                 *sql.Stmt
-	checkPhoneExistsStmt                 *sql.Stmt
-	checkUsernameExistsStmt              *sql.Stmt
-	clearExpiredMutesStmt                *sql.Stmt
-	countAdminLogsStmt                   *sql.Stmt
-	countAdminLogsByOperatorStmt         *sql.Stmt
-	countAdminLogsByRoomStmt             *sql.Stmt
-	countAdminLogsByTypeStmt             *sql.Stmt
-	countChatroomMembersStmt             *sql.Stmt
-	countFeedbacksByStatusStmt           *sql.Stmt
-	countFeedbacksByTypeStmt             *sql.Stmt
-	countFeedbacksByUserStmt             *sql.Stmt
-	countFilesByContextStmt              *sql.Stmt
-	countFilesByRoomStmt                 *sql.Stmt
-	countFilesByUploaderStmt             *sql.Stmt
-	countFriendsStmt                     *sql.Stmt
-	countMessagesInRoomStmt              *sql.Stmt
-	countNewFeedbacksStmt                *sql.Stmt
-	countOnlineChatroomMembersStmt       *sql.Stmt
-	countOnlineFriendsStmt               *sql.Stmt
-	countOnlineUsersStmt                 *sql.Stmt
-	countPendingReceivedRequestsStmt     *sql.Stmt
-	countPendingReportsStmt              *sql.Stmt
-	countReceivedFriendRequestsStmt      *sql.Stmt
-	countReportsAgainstTargetStmt        *sql.Stmt
-	countReportsByReporterStmt           *sql.Stmt
-	countReportsByStatusStmt             *sql.Stmt
-	countSearchChatroomMembersStmt       *sql.Stmt
-	countSearchUsersStmt                 *sql.Stmt
-	countSentFriendRequestsStmt          *sql.Stmt
-	countUnreadNotificationsStmt         *sql.Stmt
-	countUnreadNotificationsByTypeStmt   *sql.Stmt
-	countUserChatroomsStmt               *sql.Stmt
-	countUserNotificationsStmt           *sql.Stmt
-	createAdminLogStmt                   *sql.Stmt
-	createAnonymousFeedbackStmt          *sql.Stmt
-	createAvatarRecordStmt               *sql.Stmt
-	createBanLogStmt                     *sql.Stmt
-	createBugReportStmt                  *sql.Stmt
-	createChatImageRecordStmt            *sql.Stmt
-	createChatroomStmt                   *sql.Stmt
-	createChatroomNotificationStmt       *sql.Stmt
-	createDeleteMessageLogStmt           *sql.Stmt
-	createFeatureRequestStmt             *sql.Stmt
-	createFeedbackStmt                   *sql.Stmt
-	createFileRecordStmt                 *sql.Stmt
-	createFriendNotificationStmt         *sql.Stmt
-	createFriendRequestStmt              *sql.Stmt
-	createFriendshipStmt                 *sql.Stmt
-	createGlobalMuteRecordStmt           *sql.Stmt
-	createKickLogStmt                    *sql.Stmt
-	createMessageStmt                    *sql.Stmt
-	createMessageReportStmt              *sql.Stmt
-	createMuteLogStmt                    *sql.Stmt
-	createMuteRecordStmt                 *sql.Stmt
-	createNotificationStmt               *sql.Stmt
-	createReportStmt                     *sql.Stmt
-	createRoleChangeLogStmt              *sql.Stmt
-	createSystemNotificationStmt         *sql.Stmt
-	createUnmuteLogStmt                  *sql.Stmt
-	createUserStmt                       *sql.Stmt
-	createUserReportStmt                 *sql.Stmt
-	createUserSettingsStmt               *sql.Stmt
-	deactivateGlobalMuteRecordStmt       *sql.Stmt
-	deactivateGlobalMuteRecordByIDStmt   *sql.Stmt
-	deactivateMuteRecordStmt             *sql.Stmt
-	deactivateMuteRecordByIDStmt         *sql.Stmt
-	decrementChatroomMemberCountStmt     *sql.Stmt
-	decrementChatroomOnlineCountStmt     *sql.Stmt
-	deleteChatroomStmt                   *sql.Stmt
-	deleteFeedbackStmt                   *sql.Stmt
-	deleteFileRecordStmt                 *sql.Stmt
-	deleteFilesByUploaderStmt            *sql.Stmt
-	deleteFriendshipStmt                 *sql.Stmt
-	deleteMessageStmt                    *sql.Stmt
-	deleteMessageSoftStmt                *sql.Stmt
-	deleteMessagesByRoomStmt             *sql.Stmt
-	deleteMessagesByUserStmt             *sql.Stmt
-	deleteMessagesByUserInRoomStmt       *sql.Stmt
-	deleteNotificationStmt               *sql.Stmt
-	deleteOldDeletedFilesStmt            *sql.Stmt
-	deleteOldFeedbacksStmt               *sql.Stmt
-	deleteOldNotificationsStmt           *sql.Stmt
-	deleteReadNotificationsStmt          *sql.Stmt
-	deleteReportStmt                     *sql.Stmt
-	deleteUserAccountStmt                *sql.Stmt
-	deleteUserSettingsStmt               *sql.Stmt
-	expireGlobalMuteRecordsStmt          *sql.Stmt
-	expireMuteRecordsStmt                *sql.Stmt
-	getActiveGlobalMuteRecordStmt        *sql.Stmt
-	getActiveMembershipStmt              *sql.Stmt
-	getActiveMuteRecordStmt              *sql.Stmt
-	getActiveMuteRecordsByRoomStmt       *sql.Stmt
-	getAdminLogByIDStmt                  *sql.Stmt
-	getAdminLogStatsStmt                 *sql.Stmt
-	getAdminLogsStmt                     *sql.Stmt
-	getAdminLogsByOperatorStmt           *sql.Stmt
-	getAdminLogsByRoomStmt               *sql.Stmt
-	getAdminLogsByTimeRangeStmt          *sql.Stmt
-	getAdminLogsByTypeStmt               *sql.Stmt
-	getAdminLogsByUserStmt               *sql.Stmt
-	getAllActiveGlobalMuteRecordsStmt    *sql.Stmt
-	getAllFeedbacksStmt                  *sql.Stmt
-	getChatroomAdminsStmt                *sql.Stmt
-	getChatroomByIDStmt                  *sql.Stmt
-	getChatroomMembersStmt               *sql.Stmt
-	getChatroomOwnerStmt                 *sql.Stmt
-	getChatroomWithoutPasswordStmt       *sql.Stmt
-	getFeedbackByIDStmt                  *sql.Stmt
-	getFeedbackStatsStmt                 *sql.Stmt
-	getFeedbacksByStatusStmt             *sql.Stmt
-	getFeedbacksByTypeStmt               *sql.Stmt
-	getFeedbacksByUserStmt               *sql.Stmt
-	getFileByIDStmt                      *sql.Stmt
-	getFileByPathStmt                    *sql.Stmt
-	getFileStatsStmt                     *sql.Stmt
-	getFilesByContextStmt                *sql.Stmt
-	getFilesByRoomStmt                   *sql.Stmt
-	getFilesByUploaderStmt               *sql.Stmt
-	getFriendRequestByIDStmt             *sql.Stmt
-	getFriendsStmt                       *sql.Stmt
-	getGlobalAdminLogsStmt               *sql.Stmt
-	getGlobalMuteRecordByIDStmt          *sql.Stmt
-	getGlobalMuteRecordsByUserStmt       *sql.Stmt
-	getLargestFilesStmt                  *sql.Stmt
-	getLastMessageInRoomStmt             *sql.Stmt
-	getLatestMessagesStmt                *sql.Stmt
-	getMemberByRelIDStmt                 *sql.Stmt
-	getMemberLastReadTimeStmt            *sql.Stmt
-	getMemberMuteExpireTimeStmt          *sql.Stmt
-	getMemberRoleStmt                    *sql.Stmt
-	getMessageByIDStmt                   *sql.Stmt
-	getMessageRoomStmt                   *sql.Stmt
-	getMessageSenderStmt                 *sql.Stmt
-	getMessageWithSenderStmt             *sql.Stmt
-	getMessagesAfterStmt                 *sql.Stmt
-	getMessagesBeforeStmt                *sql.Stmt
-	getMessagesByIDsStmt                 *sql.Stmt
-	getMessagesByRoomStmt                *sql.Stmt
-	getMessagesByRoomAscStmt             *sql.Stmt
-	getMessagesByTimeRangeStmt           *sql.Stmt
-	getMessagesByUserStmt                *sql.Stmt
-	getMessagesByUserInRoomStmt          *sql.Stmt
-	getMessagesQuotingThisStmt           *sql.Stmt
-	getMostActiveFeedbackUsersStmt       *sql.Stmt
-	getMostActiveUploadersStmt           *sql.Stmt
-	getMostReportedMessagesStmt          *sql.Stmt
-	getMostReportedUsersStmt             *sql.Stmt
-	getMuteRecordByIDStmt                *sql.Stmt
-	getMuteRecordsByMemberStmt           *sql.Stmt
-	getMuteRecordsByRoomStmt             *sql.Stmt
-	getMutedMembersStmt                  *sql.Stmt
-	getMutualFriendsStmt                 *sql.Stmt
-	getNewFeedbacksStmt                  *sql.Stmt
-	getNotificationByIDStmt              *sql.Stmt
-	getNotificationStatsStmt             *sql.Stmt
-	getOnlineChatroomMembersStmt         *sql.Stmt
-	getOnlineFriendsStmt                 *sql.Stmt
-	getOnlineUsersStmt                   *sql.Stmt
-	getOperatorStatsStmt                 *sql.Stmt
-	getPendingReceivedRequestsStmt       *sql.Stmt
-	getPendingReportsStmt                *sql.Stmt
-	getPendingRequestBetweenUsersStmt    *sql.Stmt
-	getQuotedMessageStmt                 *sql.Stmt
-	getReceivedFriendRequestsStmt        *sql.Stmt
-	getRecentFeedbackTrendStmt           *sql.Stmt
-	getRecentUploadTrendStmt             *sql.Stmt
-	getReportByIDStmt                    *sql.Stmt
-	getReportStatsStmt                   *sql.Stmt
-	getReportsAgainstTargetStmt          *sql.Stmt
-	getReportsByReporterStmt             *sql.Stmt
-	getReportsByStatusStmt               *sql.Stmt
-	getReportsByTargetTypeStmt           *sql.Stmt
-	getRoomStorageSizeStmt               *sql.Stmt
-	getSearchableUsersByEmailStmt        *sql.Stmt
-	getSearchableUsersByPhoneStmt        *sql.Stmt
-	getSentFriendRequestsStmt            *sql.Stmt
-	getTotalStorageSizeStmt              *sql.Stmt
-	getUnreadMessageCountStmt            *sql.Stmt
-	getUnreadMessagesStmt                *sql.Stmt
-	getUnreadNotificationsStmt           *sql.Stmt
-	getUnreadNotificationsByTypeStmt     *sql.Stmt
-	getUserAvatarsStmt                   *sql.Stmt
-	getUserByEmailStmt                   *sql.Stmt
-	getUserByIDStmt                      *sql.Stmt
-	getUserByUsernameStmt                *sql.Stmt
-	getUserChatroomMembershipStmt        *sql.Stmt
-	getUserGlobalMuteExpireTimeStmt      *sql.Stmt
-	getUserLatestAvatarStmt              *sql.Stmt
-	getUserMuteStatusStmt                *sql.Stmt
-	getUserNotificationPreferencesStmt   *sql.Stmt
-	getUserNotificationsStmt             *sql.Stmt
-	getUserNotificationsByTypeStmt       *sql.Stmt
-	getUserPrivacyPreferencesStmt        *sql.Stmt
-	getUserPublicInfoStmt                *sql.Stmt
-	getUserSettingsStmt                  *sql.Stmt
-	getUserStorageSizeStmt               *sql.Stmt
-	getUserSystemRoleStmt                *sql.Stmt
-	getUserUnreadCountsInAllRoomsStmt    *sql.Stmt
-	getUsersByIDsStmt                    *sql.Stmt
-	getUsersWithFriendRequestEnabledStmt *sql.Stmt
-	incrementChatroomMemberCountStmt     *sql.Stmt
-	incrementChatroomOnlineCountStmt     *sql.Stmt
-	isChatroomPublicStmt                 *sql.Stmt
-	isFriendStmt                         *sql.Stmt
-	isMemberMutedStmt                    *sql.Stmt
-	isMemberMutedInRoomStmt              *sql.Stmt
-	isMessageSenderStmt                  *sql.Stmt
-	isUserAdminStmt                      *sql.Stmt
-	isUserAdminOrOwnerStmt               *sql.Stmt
-	isUserGloballyMutedStmt              *sql.Stmt
-	isUserInChatroomStmt                 *sql.Stmt
-	isUserOwnerStmt                      *sql.Stmt
-	isUserSearchableByEmailStmt          *sql.Stmt
-	isUserSearchableByPhoneStmt          *sql.Stmt
-	joinChatroomStmt                     *sql.Stmt
-	kickMemberStmt                       *sql.Stmt
-	leaveChatroomStmt                    *sql.Stmt
-	listPublicChatroomsStmt              *sql.Stmt
-	listUserChatroomsStmt                *sql.Stmt
-	markAllNotificationsAsReadStmt       *sql.Stmt
-	markFeedbackAsClosedStmt             *sql.Stmt
-	markFeedbackAsCompletedStmt          *sql.Stmt
-	markFeedbackAsInProgressStmt         *sql.Stmt
-	markFeedbackAsReviewedStmt           *sql.Stmt
-	markFileAsDeletedStmt                *sql.Stmt
-	markNotificationAsReadStmt           *sql.Stmt
-	markNotificationsByTypeAsReadStmt    *sql.Stmt
-	muteMemberStmt                       *sql.Stmt
-	rejectFriendRequestStmt              *sql.Stmt
-	rejectReportStmt                     *sql.Stmt
-	removeMemberAdminStmt                *sql.Stmt
-	resolveReportStmt                    *sql.Stmt
-	restoreDeletedFileStmt               *sql.Stmt
-	searchChatroomMembersStmt            *sql.Stmt
-	searchChatroomsStmt                  *sql.Stmt
-	searchFeedbacksStmt                  *sql.Stmt
-	searchFriendsStmt                    *sql.Stmt
-	searchMessagesInRoomStmt             *sql.Stmt
-	searchUsersStmt                      *sql.Stmt
-	setMemberAsAdminStmt                 *sql.Stmt
-	setMemberRoleStmt                    *sql.Stmt
-	setUserOfflineStmt                   *sql.Stmt
-	setUserOnlineStmt                    *sql.Stmt
-	setUserSystemRoleStmt                *sql.Stmt
-	shouldShowOnlineStatusStmt           *sql.Stmt
-	suspendUserStmt                      *sql.Stmt
-	syncChatroomMemberCountStmt          *sql.Stmt
-	syncChatroomOnlineCountStmt          *sql.Stmt
-	transferOwnershipStmt                *sql.Stmt
-	unmuteMemberStmt                     *sql.Stmt
-	updateAccountStatusStmt              *sql.Stmt
-	updateChatroomStmt                   *sql.Stmt
-	updateChatroomLastActiveTimeStmt     *sql.Stmt
-	updateFeedbackStatusStmt             *sql.Stmt
-	updateMemberLastReadTimeStmt         *sql.Stmt
-	updateMemberLastReadToMessageStmt    *sql.Stmt
-	updateMessageStmt                    *sql.Stmt
-	updateNotificationSettingsStmt       *sql.Stmt
-	updatePrivacySettingsStmt            *sql.Stmt
-	updateUserStmt                       *sql.Stmt
-	updateUserAvatarStmt                 *sql.Stmt
-	updateUserLastLoginStmt              *sql.Stmt
-	updateUserOnlineStatusStmt           *sql.Stmt
-	updateUserPasswordStmt               *sql.Stmt
-	updateUserSettingsStmt               *sql.Stmt
-	verifyChatroomPasswordStmt           *sql.Stmt
+	db                                    DBTX
+	tx                                    *sql.Tx
+	acceptFriendRequestStmt               *sql.Stmt
+	activateUserStmt                      *sql.Stmt
+	advanceDirectCountersStmt             *sql.Stmt
+	advanceDirectReadStmt                 *sql.Stmt
+	advanceDirectRevisionStmt             *sql.Stmt
+	archiveChatroomStmt                   *sql.Stmt
+	canUserSendMessageInRoomStmt          *sql.Stmt
+	cancelFriendRequestStmt               *sql.Stmt
+	checkDuplicateReportStmt              *sql.Stmt
+	checkEmailExistsStmt                  *sql.Stmt
+	checkPhoneExistsStmt                  *sql.Stmt
+	checkUsernameExistsStmt               *sql.Stmt
+	clearExpiredMutesStmt                 *sql.Stmt
+	conversationKindStmt                  *sql.Stmt
+	countAdminLogsStmt                    *sql.Stmt
+	countAdminLogsByOperatorStmt          *sql.Stmt
+	countAdminLogsByRoomStmt              *sql.Stmt
+	countAdminLogsByTypeStmt              *sql.Stmt
+	countChatroomMembersStmt              *sql.Stmt
+	countFeedbacksByStatusStmt            *sql.Stmt
+	countFeedbacksByTypeStmt              *sql.Stmt
+	countFeedbacksByUserStmt              *sql.Stmt
+	countFilesByContextStmt               *sql.Stmt
+	countFilesByRoomStmt                  *sql.Stmt
+	countFilesByUploaderStmt              *sql.Stmt
+	countFriendsStmt                      *sql.Stmt
+	countInvitableRoomsStmt               *sql.Stmt
+	countInvitationListStmt               *sql.Stmt
+	countInvitationsMinuteStmt            *sql.Stmt
+	countInvitationsTodayStmt             *sql.Stmt
+	countMessagesInRoomStmt               *sql.Stmt
+	countNewFeedbacksStmt                 *sql.Stmt
+	countOnlineChatroomMembersStmt        *sql.Stmt
+	countOnlineFriendsStmt                *sql.Stmt
+	countOnlineUsersStmt                  *sql.Stmt
+	countPendingInvitationsStmt           *sql.Stmt
+	countPendingReceivedRequestsStmt      *sql.Stmt
+	countPendingReportsStmt               *sql.Stmt
+	countReceivedFriendRequestsStmt       *sql.Stmt
+	countReportsAgainstTargetStmt         *sql.Stmt
+	countReportsByReporterStmt            *sql.Stmt
+	countReportsByStatusStmt              *sql.Stmt
+	countSearchChatroomMembersStmt        *sql.Stmt
+	countSearchUsersStmt                  *sql.Stmt
+	countSentFriendRequestsStmt           *sql.Stmt
+	countSocialFriendListStmt             *sql.Stmt
+	countSocialRequestListStmt            *sql.Stmt
+	countSocialRequestsTodayStmt          *sql.Stmt
+	countUnreadNotificationsStmt          *sql.Stmt
+	countUnreadNotificationsByTypeStmt    *sql.Stmt
+	countUserChatroomsStmt                *sql.Stmt
+	countUserNotificationsStmt            *sql.Stmt
+	createAdminLogStmt                    *sql.Stmt
+	createAnonymousFeedbackStmt           *sql.Stmt
+	createAvatarRecordStmt                *sql.Stmt
+	createBanLogStmt                      *sql.Stmt
+	createBugReportStmt                   *sql.Stmt
+	createChatImageRecordStmt             *sql.Stmt
+	createChatroomStmt                    *sql.Stmt
+	createChatroomNotificationStmt        *sql.Stmt
+	createDeleteMessageLogStmt            *sql.Stmt
+	createDirectPairStmt                  *sql.Stmt
+	createDirectRoomStmt                  *sql.Stmt
+	createFeatureRequestStmt              *sql.Stmt
+	createFeedbackStmt                    *sql.Stmt
+	createFileRecordStmt                  *sql.Stmt
+	createFriendNotificationStmt          *sql.Stmt
+	createFriendRequestStmt               *sql.Stmt
+	createFriendshipStmt                  *sql.Stmt
+	createGlobalMuteRecordStmt            *sql.Stmt
+	createInvitationStmt                  *sql.Stmt
+	createKickLogStmt                     *sql.Stmt
+	createMessageStmt                     *sql.Stmt
+	createMessageReportStmt               *sql.Stmt
+	createMuteLogStmt                     *sql.Stmt
+	createMuteRecordStmt                  *sql.Stmt
+	createNotificationStmt                *sql.Stmt
+	createReportStmt                      *sql.Stmt
+	createRoleChangeLogStmt               *sql.Stmt
+	createSystemNotificationStmt          *sql.Stmt
+	createUnmuteLogStmt                   *sql.Stmt
+	createUserStmt                        *sql.Stmt
+	createUserReportStmt                  *sql.Stmt
+	createUserSettingsStmt                *sql.Stmt
+	deactivateGlobalMuteRecordStmt        *sql.Stmt
+	deactivateGlobalMuteRecordByIDStmt    *sql.Stmt
+	deactivateGroupMembersStmt            *sql.Stmt
+	deactivateMuteRecordStmt              *sql.Stmt
+	deactivateMuteRecordByIDStmt          *sql.Stmt
+	decrementChatroomMemberCountStmt      *sql.Stmt
+	decrementChatroomOnlineCountStmt      *sql.Stmt
+	deleteChatroomStmt                    *sql.Stmt
+	deleteFeedbackStmt                    *sql.Stmt
+	deleteFileRecordStmt                  *sql.Stmt
+	deleteFilesByUploaderStmt             *sql.Stmt
+	deleteFriendshipStmt                  *sql.Stmt
+	deleteMessageStmt                     *sql.Stmt
+	deleteMessageSoftStmt                 *sql.Stmt
+	deleteMessagesByRoomStmt              *sql.Stmt
+	deleteMessagesByUserStmt              *sql.Stmt
+	deleteMessagesByUserInRoomStmt        *sql.Stmt
+	deleteNotificationStmt                *sql.Stmt
+	deleteOldDeletedFilesStmt             *sql.Stmt
+	deleteOldFeedbacksStmt                *sql.Stmt
+	deleteOldNotificationsStmt            *sql.Stmt
+	deleteReadNotificationsStmt           *sql.Stmt
+	deleteReportStmt                      *sql.Stmt
+	deleteUserAccountStmt                 *sql.Stmt
+	deleteUserSettingsStmt                *sql.Stmt
+	directActivityStmt                    *sql.Stmt
+	directChangesStmt                     *sql.Stmt
+	directConversationListStmt            *sql.Stmt
+	directHistoryAfterStmt                *sql.Stmt
+	directHistoryBeforeStmt               *sql.Stmt
+	directMessageByIDStmt                 *sql.Stmt
+	directMessageByKeyStmt                *sql.Stmt
+	directPairByRoomStmt                  *sql.Stmt
+	directReadPositionStmt                *sql.Stmt
+	directUnreadStmt                      *sql.Stmt
+	editDirectMessageStmt                 *sql.Stmt
+	effectiveInvitationStatusStmt         *sql.Stmt
+	expireGlobalMuteRecordsStmt           *sql.Stmt
+	expireInvitationsStmt                 *sql.Stmt
+	expireMuteRecordsStmt                 *sql.Stmt
+	getActiveGlobalMuteRecordStmt         *sql.Stmt
+	getActiveMembershipStmt               *sql.Stmt
+	getActiveMuteRecordStmt               *sql.Stmt
+	getActiveMuteRecordsByRoomStmt        *sql.Stmt
+	getAdminLogByIDStmt                   *sql.Stmt
+	getAdminLogStatsStmt                  *sql.Stmt
+	getAdminLogsStmt                      *sql.Stmt
+	getAdminLogsByOperatorStmt            *sql.Stmt
+	getAdminLogsByRoomStmt                *sql.Stmt
+	getAdminLogsByTimeRangeStmt           *sql.Stmt
+	getAdminLogsByTypeStmt                *sql.Stmt
+	getAdminLogsByUserStmt                *sql.Stmt
+	getAllActiveGlobalMuteRecordsStmt     *sql.Stmt
+	getAllFeedbacksStmt                   *sql.Stmt
+	getChatroomAdminsStmt                 *sql.Stmt
+	getChatroomByIDStmt                   *sql.Stmt
+	getChatroomInvitationStmt             *sql.Stmt
+	getChatroomMembersStmt                *sql.Stmt
+	getChatroomOwnerStmt                  *sql.Stmt
+	getChatroomWithoutPasswordStmt        *sql.Stmt
+	getDirectPairStmt                     *sql.Stmt
+	getFeedbackByIDStmt                   *sql.Stmt
+	getFeedbackStatsStmt                  *sql.Stmt
+	getFeedbacksByStatusStmt              *sql.Stmt
+	getFeedbacksByTypeStmt                *sql.Stmt
+	getFeedbacksByUserStmt                *sql.Stmt
+	getFileByIDStmt                       *sql.Stmt
+	getFileByPathStmt                     *sql.Stmt
+	getFileStatsStmt                      *sql.Stmt
+	getFilesByContextStmt                 *sql.Stmt
+	getFilesByRoomStmt                    *sql.Stmt
+	getFilesByUploaderStmt                *sql.Stmt
+	getFriendRequestByIDStmt              *sql.Stmt
+	getFriendsStmt                        *sql.Stmt
+	getGlobalAdminLogsStmt                *sql.Stmt
+	getGlobalMuteRecordByIDStmt           *sql.Stmt
+	getGlobalMuteRecordsByUserStmt        *sql.Stmt
+	getLargestFilesStmt                   *sql.Stmt
+	getLastMessageInRoomStmt              *sql.Stmt
+	getLatestMessagesStmt                 *sql.Stmt
+	getMemberByRelIDStmt                  *sql.Stmt
+	getMemberLastReadTimeStmt             *sql.Stmt
+	getMemberMuteExpireTimeStmt           *sql.Stmt
+	getMemberRoleStmt                     *sql.Stmt
+	getMessageByIDStmt                    *sql.Stmt
+	getMessageRoomStmt                    *sql.Stmt
+	getMessageSenderStmt                  *sql.Stmt
+	getMessageWithSenderStmt              *sql.Stmt
+	getMessagesAfterStmt                  *sql.Stmt
+	getMessagesBeforeStmt                 *sql.Stmt
+	getMessagesByIDsStmt                  *sql.Stmt
+	getMessagesByRoomStmt                 *sql.Stmt
+	getMessagesByRoomAscStmt              *sql.Stmt
+	getMessagesByTimeRangeStmt            *sql.Stmt
+	getMessagesByUserStmt                 *sql.Stmt
+	getMessagesByUserInRoomStmt           *sql.Stmt
+	getMessagesQuotingThisStmt            *sql.Stmt
+	getMostActiveFeedbackUsersStmt        *sql.Stmt
+	getMostActiveUploadersStmt            *sql.Stmt
+	getMostReportedMessagesStmt           *sql.Stmt
+	getMostReportedUsersStmt              *sql.Stmt
+	getMuteRecordByIDStmt                 *sql.Stmt
+	getMuteRecordsByMemberStmt            *sql.Stmt
+	getMuteRecordsByRoomStmt              *sql.Stmt
+	getMutedMembersStmt                   *sql.Stmt
+	getMutualFriendsStmt                  *sql.Stmt
+	getNewFeedbacksStmt                   *sql.Stmt
+	getNotificationByIDStmt               *sql.Stmt
+	getNotificationStatsStmt              *sql.Stmt
+	getOnlineChatroomMembersStmt          *sql.Stmt
+	getOnlineFriendsStmt                  *sql.Stmt
+	getOnlineUsersStmt                    *sql.Stmt
+	getOperatorStatsStmt                  *sql.Stmt
+	getPendingReceivedRequestsStmt        *sql.Stmt
+	getPendingReportsStmt                 *sql.Stmt
+	getPendingRequestBetweenUsersStmt     *sql.Stmt
+	getQuotedMessageStmt                  *sql.Stmt
+	getReceivedFriendRequestsStmt         *sql.Stmt
+	getRecentFeedbackTrendStmt            *sql.Stmt
+	getRecentUploadTrendStmt              *sql.Stmt
+	getReportByIDStmt                     *sql.Stmt
+	getReportStatsStmt                    *sql.Stmt
+	getReportsAgainstTargetStmt           *sql.Stmt
+	getReportsByReporterStmt              *sql.Stmt
+	getReportsByStatusStmt                *sql.Stmt
+	getReportsByTargetTypeStmt            *sql.Stmt
+	getRoomStorageSizeStmt                *sql.Stmt
+	getSearchableUsersByEmailStmt         *sql.Stmt
+	getSearchableUsersByPhoneStmt         *sql.Stmt
+	getSentFriendRequestsStmt             *sql.Stmt
+	getTotalStorageSizeStmt               *sql.Stmt
+	getUnreadMessageCountStmt             *sql.Stmt
+	getUnreadMessagesStmt                 *sql.Stmt
+	getUnreadNotificationsStmt            *sql.Stmt
+	getUnreadNotificationsByTypeStmt      *sql.Stmt
+	getUserAvatarsStmt                    *sql.Stmt
+	getUserByEmailStmt                    *sql.Stmt
+	getUserByIDStmt                       *sql.Stmt
+	getUserByUsernameStmt                 *sql.Stmt
+	getUserChatroomMembershipStmt         *sql.Stmt
+	getUserGlobalMuteExpireTimeStmt       *sql.Stmt
+	getUserLatestAvatarStmt               *sql.Stmt
+	getUserMuteStatusStmt                 *sql.Stmt
+	getUserNotificationPreferencesStmt    *sql.Stmt
+	getUserNotificationsStmt              *sql.Stmt
+	getUserNotificationsByTypeStmt        *sql.Stmt
+	getUserPrivacyPreferencesStmt         *sql.Stmt
+	getUserPublicInfoStmt                 *sql.Stmt
+	getUserSettingsStmt                   *sql.Stmt
+	getUserStorageSizeStmt                *sql.Stmt
+	getUserSystemRoleStmt                 *sql.Stmt
+	getUserUnreadCountsInAllRoomsStmt     *sql.Stmt
+	getUsersByIDsStmt                     *sql.Stmt
+	getUsersWithFriendRequestEnabledStmt  *sql.Stmt
+	groupActiveMembersStmt                *sql.Stmt
+	groupManagersStmt                     *sql.Stmt
+	incrementChatroomMemberCountStmt      *sql.Stmt
+	incrementChatroomOnlineCountStmt      *sql.Stmt
+	insertDirectMessageStmt               *sql.Stmt
+	invalidateFriendInvitationsStmt       *sql.Stmt
+	invalidateMemberInvitationsStmt       *sql.Stmt
+	invalidateRoomInvitationsStmt         *sql.Stmt
+	invalidateUnauthorizedInvitationsStmt *sql.Stmt
+	invitableRoomsStmt                    *sql.Stmt
+	invitationClockStmt                   *sql.Stmt
+	invitationListStmt                    *sql.Stmt
+	isChatroomPublicStmt                  *sql.Stmt
+	isFriendStmt                          *sql.Stmt
+	isMemberMutedStmt                     *sql.Stmt
+	isMemberMutedInRoomStmt               *sql.Stmt
+	isMessageSenderStmt                   *sql.Stmt
+	isUserAdminStmt                       *sql.Stmt
+	isUserAdminOrOwnerStmt                *sql.Stmt
+	isUserGloballyMutedStmt               *sql.Stmt
+	isUserInChatroomStmt                  *sql.Stmt
+	isUserOwnerStmt                       *sql.Stmt
+	isUserSearchableByEmailStmt           *sql.Stmt
+	isUserSearchableByPhoneStmt           *sql.Stmt
+	joinChatroomStmt                      *sql.Stmt
+	kickMemberStmt                        *sql.Stmt
+	latestDirectMessageStmt               *sql.Stmt
+	latestInvitationStmt                  *sql.Stmt
+	latestSocialRequestStmt               *sql.Stmt
+	leaveChatroomStmt                     *sql.Stmt
+	listPublicChatroomsStmt               *sql.Stmt
+	listUserChatroomsStmt                 *sql.Stmt
+	lockDirectRoomStmt                    *sql.Stmt
+	lockFreeGroupRoomStmt                 *sql.Stmt
+	lockGroupRoomStmt                     *sql.Stmt
+	lockInvitationStmt                    *sql.Stmt
+	lockSocialPairStmt                    *sql.Stmt
+	lockSocialRequestStmt                 *sql.Stmt
+	markAllNotificationsAsReadStmt        *sql.Stmt
+	markFeedbackAsClosedStmt              *sql.Stmt
+	markFeedbackAsCompletedStmt           *sql.Stmt
+	markFeedbackAsInProgressStmt          *sql.Stmt
+	markFeedbackAsReviewedStmt            *sql.Stmt
+	markFileAsDeletedStmt                 *sql.Stmt
+	markNotificationAsReadStmt            *sql.Stmt
+	markNotificationsByTypeAsReadStmt     *sql.Stmt
+	muteMemberStmt                        *sql.Stmt
+	pendingInvitationStmt                 *sql.Stmt
+	recordDirectChangeStmt                *sql.Stmt
+	rejectFriendRequestStmt               *sql.Stmt
+	rejectReportStmt                      *sql.Stmt
+	removeMemberAdminStmt                 *sql.Stmt
+	resetDeletedGroupCountsStmt           *sql.Stmt
+	resolveReportStmt                     *sql.Stmt
+	restoreDeletedFileStmt                *sql.Stmt
+	searchChatroomMembersStmt             *sql.Stmt
+	searchChatroomsStmt                   *sql.Stmt
+	searchFeedbacksStmt                   *sql.Stmt
+	searchFriendsStmt                     *sql.Stmt
+	searchMessagesInRoomStmt              *sql.Stmt
+	searchSocialUserStmt                  *sql.Stmt
+	searchUsersStmt                       *sql.Stmt
+	setMemberAsAdminStmt                  *sql.Stmt
+	setMemberRoleStmt                     *sql.Stmt
+	setSocialRequestStatusStmt            *sql.Stmt
+	setUserOfflineStmt                    *sql.Stmt
+	setUserOnlineStmt                     *sql.Stmt
+	setUserSystemRoleStmt                 *sql.Stmt
+	shouldShowOnlineStatusStmt            *sql.Stmt
+	socialFriendListStmt                  *sql.Stmt
+	socialFriendSinceStmt                 *sql.Stmt
+	socialProfileStmt                     *sql.Stmt
+	socialRequestListStmt                 *sql.Stmt
+	staleInvitationsStmt                  *sql.Stmt
+	suspendUserStmt                       *sql.Stmt
+	syncChatroomMemberCountStmt           *sql.Stmt
+	syncChatroomOnlineCountStmt           *sql.Stmt
+	totalDirectUnreadStmt                 *sql.Stmt
+	touchDirectRoomStmt                   *sql.Stmt
+	transferOwnershipStmt                 *sql.Stmt
+	transitionInvitationStmt              *sql.Stmt
+	unmuteMemberStmt                      *sql.Stmt
+	updateAccountStatusStmt               *sql.Stmt
+	updateChatroomStmt                    *sql.Stmt
+	updateChatroomLastActiveTimeStmt      *sql.Stmt
+	updateFeedbackStatusStmt              *sql.Stmt
+	updateMemberLastReadTimeStmt          *sql.Stmt
+	updateMemberLastReadToMessageStmt     *sql.Stmt
+	updateMessageStmt                     *sql.Stmt
+	updateNotificationSettingsStmt        *sql.Stmt
+	updatePrivacySettingsStmt             *sql.Stmt
+	updateUserStmt                        *sql.Stmt
+	updateUserAvatarStmt                  *sql.Stmt
+	updateUserLastLoginStmt               *sql.Stmt
+	updateUserOnlineStatusStmt            *sql.Stmt
+	updateUserPasswordStmt                *sql.Stmt
+	updateUserSettingsStmt                *sql.Stmt
+	verifyChatroomPasswordStmt            *sql.Stmt
+	withdrawDirectMessageStmt             *sql.Stmt
 }
 
 func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 	return &Queries{
-		db:                                   tx,
-		tx:                                   tx,
-		acceptFriendRequestStmt:              q.acceptFriendRequestStmt,
-		activateUserStmt:                     q.activateUserStmt,
-		archiveChatroomStmt:                  q.archiveChatroomStmt,
-		canUserSendMessageInRoomStmt:         q.canUserSendMessageInRoomStmt,
-		cancelFriendRequestStmt:              q.cancelFriendRequestStmt,
-		checkDuplicateReportStmt:             q.checkDuplicateReportStmt,
-		checkEmailExistsStmt:                 q.checkEmailExistsStmt,
-		checkPhoneExistsStmt:                 q.checkPhoneExistsStmt,
-		checkUsernameExistsStmt:              q.checkUsernameExistsStmt,
-		clearExpiredMutesStmt:                q.clearExpiredMutesStmt,
-		countAdminLogsStmt:                   q.countAdminLogsStmt,
-		countAdminLogsByOperatorStmt:         q.countAdminLogsByOperatorStmt,
-		countAdminLogsByRoomStmt:             q.countAdminLogsByRoomStmt,
-		countAdminLogsByTypeStmt:             q.countAdminLogsByTypeStmt,
-		countChatroomMembersStmt:             q.countChatroomMembersStmt,
-		countFeedbacksByStatusStmt:           q.countFeedbacksByStatusStmt,
-		countFeedbacksByTypeStmt:             q.countFeedbacksByTypeStmt,
-		countFeedbacksByUserStmt:             q.countFeedbacksByUserStmt,
-		countFilesByContextStmt:              q.countFilesByContextStmt,
-		countFilesByRoomStmt:                 q.countFilesByRoomStmt,
-		countFilesByUploaderStmt:             q.countFilesByUploaderStmt,
-		countFriendsStmt:                     q.countFriendsStmt,
-		countMessagesInRoomStmt:              q.countMessagesInRoomStmt,
-		countNewFeedbacksStmt:                q.countNewFeedbacksStmt,
-		countOnlineChatroomMembersStmt:       q.countOnlineChatroomMembersStmt,
-		countOnlineFriendsStmt:               q.countOnlineFriendsStmt,
-		countOnlineUsersStmt:                 q.countOnlineUsersStmt,
-		countPendingReceivedRequestsStmt:     q.countPendingReceivedRequestsStmt,
-		countPendingReportsStmt:              q.countPendingReportsStmt,
-		countReceivedFriendRequestsStmt:      q.countReceivedFriendRequestsStmt,
-		countReportsAgainstTargetStmt:        q.countReportsAgainstTargetStmt,
-		countReportsByReporterStmt:           q.countReportsByReporterStmt,
-		countReportsByStatusStmt:             q.countReportsByStatusStmt,
-		countSearchChatroomMembersStmt:       q.countSearchChatroomMembersStmt,
-		countSearchUsersStmt:                 q.countSearchUsersStmt,
-		countSentFriendRequestsStmt:          q.countSentFriendRequestsStmt,
-		countUnreadNotificationsStmt:         q.countUnreadNotificationsStmt,
-		countUnreadNotificationsByTypeStmt:   q.countUnreadNotificationsByTypeStmt,
-		countUserChatroomsStmt:               q.countUserChatroomsStmt,
-		countUserNotificationsStmt:           q.countUserNotificationsStmt,
-		createAdminLogStmt:                   q.createAdminLogStmt,
-		createAnonymousFeedbackStmt:          q.createAnonymousFeedbackStmt,
-		createAvatarRecordStmt:               q.createAvatarRecordStmt,
-		createBanLogStmt:                     q.createBanLogStmt,
-		createBugReportStmt:                  q.createBugReportStmt,
-		createChatImageRecordStmt:            q.createChatImageRecordStmt,
-		createChatroomStmt:                   q.createChatroomStmt,
-		createChatroomNotificationStmt:       q.createChatroomNotificationStmt,
-		createDeleteMessageLogStmt:           q.createDeleteMessageLogStmt,
-		createFeatureRequestStmt:             q.createFeatureRequestStmt,
-		createFeedbackStmt:                   q.createFeedbackStmt,
-		createFileRecordStmt:                 q.createFileRecordStmt,
-		createFriendNotificationStmt:         q.createFriendNotificationStmt,
-		createFriendRequestStmt:              q.createFriendRequestStmt,
-		createFriendshipStmt:                 q.createFriendshipStmt,
-		createGlobalMuteRecordStmt:           q.createGlobalMuteRecordStmt,
-		createKickLogStmt:                    q.createKickLogStmt,
-		createMessageStmt:                    q.createMessageStmt,
-		createMessageReportStmt:              q.createMessageReportStmt,
-		createMuteLogStmt:                    q.createMuteLogStmt,
-		createMuteRecordStmt:                 q.createMuteRecordStmt,
-		createNotificationStmt:               q.createNotificationStmt,
-		createReportStmt:                     q.createReportStmt,
-		createRoleChangeLogStmt:              q.createRoleChangeLogStmt,
-		createSystemNotificationStmt:         q.createSystemNotificationStmt,
-		createUnmuteLogStmt:                  q.createUnmuteLogStmt,
-		createUserStmt:                       q.createUserStmt,
-		createUserReportStmt:                 q.createUserReportStmt,
-		createUserSettingsStmt:               q.createUserSettingsStmt,
-		deactivateGlobalMuteRecordStmt:       q.deactivateGlobalMuteRecordStmt,
-		deactivateGlobalMuteRecordByIDStmt:   q.deactivateGlobalMuteRecordByIDStmt,
-		deactivateMuteRecordStmt:             q.deactivateMuteRecordStmt,
-		deactivateMuteRecordByIDStmt:         q.deactivateMuteRecordByIDStmt,
-		decrementChatroomMemberCountStmt:     q.decrementChatroomMemberCountStmt,
-		decrementChatroomOnlineCountStmt:     q.decrementChatroomOnlineCountStmt,
-		deleteChatroomStmt:                   q.deleteChatroomStmt,
-		deleteFeedbackStmt:                   q.deleteFeedbackStmt,
-		deleteFileRecordStmt:                 q.deleteFileRecordStmt,
-		deleteFilesByUploaderStmt:            q.deleteFilesByUploaderStmt,
-		deleteFriendshipStmt:                 q.deleteFriendshipStmt,
-		deleteMessageStmt:                    q.deleteMessageStmt,
-		deleteMessageSoftStmt:                q.deleteMessageSoftStmt,
-		deleteMessagesByRoomStmt:             q.deleteMessagesByRoomStmt,
-		deleteMessagesByUserStmt:             q.deleteMessagesByUserStmt,
-		deleteMessagesByUserInRoomStmt:       q.deleteMessagesByUserInRoomStmt,
-		deleteNotificationStmt:               q.deleteNotificationStmt,
-		deleteOldDeletedFilesStmt:            q.deleteOldDeletedFilesStmt,
-		deleteOldFeedbacksStmt:               q.deleteOldFeedbacksStmt,
-		deleteOldNotificationsStmt:           q.deleteOldNotificationsStmt,
-		deleteReadNotificationsStmt:          q.deleteReadNotificationsStmt,
-		deleteReportStmt:                     q.deleteReportStmt,
-		deleteUserAccountStmt:                q.deleteUserAccountStmt,
-		deleteUserSettingsStmt:               q.deleteUserSettingsStmt,
-		expireGlobalMuteRecordsStmt:          q.expireGlobalMuteRecordsStmt,
-		expireMuteRecordsStmt:                q.expireMuteRecordsStmt,
-		getActiveGlobalMuteRecordStmt:        q.getActiveGlobalMuteRecordStmt,
-		getActiveMembershipStmt:              q.getActiveMembershipStmt,
-		getActiveMuteRecordStmt:              q.getActiveMuteRecordStmt,
-		getActiveMuteRecordsByRoomStmt:       q.getActiveMuteRecordsByRoomStmt,
-		getAdminLogByIDStmt:                  q.getAdminLogByIDStmt,
-		getAdminLogStatsStmt:                 q.getAdminLogStatsStmt,
-		getAdminLogsStmt:                     q.getAdminLogsStmt,
-		getAdminLogsByOperatorStmt:           q.getAdminLogsByOperatorStmt,
-		getAdminLogsByRoomStmt:               q.getAdminLogsByRoomStmt,
-		getAdminLogsByTimeRangeStmt:          q.getAdminLogsByTimeRangeStmt,
-		getAdminLogsByTypeStmt:               q.getAdminLogsByTypeStmt,
-		getAdminLogsByUserStmt:               q.getAdminLogsByUserStmt,
-		getAllActiveGlobalMuteRecordsStmt:    q.getAllActiveGlobalMuteRecordsStmt,
-		getAllFeedbacksStmt:                  q.getAllFeedbacksStmt,
-		getChatroomAdminsStmt:                q.getChatroomAdminsStmt,
-		getChatroomByIDStmt:                  q.getChatroomByIDStmt,
-		getChatroomMembersStmt:               q.getChatroomMembersStmt,
-		getChatroomOwnerStmt:                 q.getChatroomOwnerStmt,
-		getChatroomWithoutPasswordStmt:       q.getChatroomWithoutPasswordStmt,
-		getFeedbackByIDStmt:                  q.getFeedbackByIDStmt,
-		getFeedbackStatsStmt:                 q.getFeedbackStatsStmt,
-		getFeedbacksByStatusStmt:             q.getFeedbacksByStatusStmt,
-		getFeedbacksByTypeStmt:               q.getFeedbacksByTypeStmt,
-		getFeedbacksByUserStmt:               q.getFeedbacksByUserStmt,
-		getFileByIDStmt:                      q.getFileByIDStmt,
-		getFileByPathStmt:                    q.getFileByPathStmt,
-		getFileStatsStmt:                     q.getFileStatsStmt,
-		getFilesByContextStmt:                q.getFilesByContextStmt,
-		getFilesByRoomStmt:                   q.getFilesByRoomStmt,
-		getFilesByUploaderStmt:               q.getFilesByUploaderStmt,
-		getFriendRequestByIDStmt:             q.getFriendRequestByIDStmt,
-		getFriendsStmt:                       q.getFriendsStmt,
-		getGlobalAdminLogsStmt:               q.getGlobalAdminLogsStmt,
-		getGlobalMuteRecordByIDStmt:          q.getGlobalMuteRecordByIDStmt,
-		getGlobalMuteRecordsByUserStmt:       q.getGlobalMuteRecordsByUserStmt,
-		getLargestFilesStmt:                  q.getLargestFilesStmt,
-		getLastMessageInRoomStmt:             q.getLastMessageInRoomStmt,
-		getLatestMessagesStmt:                q.getLatestMessagesStmt,
-		getMemberByRelIDStmt:                 q.getMemberByRelIDStmt,
-		getMemberLastReadTimeStmt:            q.getMemberLastReadTimeStmt,
-		getMemberMuteExpireTimeStmt:          q.getMemberMuteExpireTimeStmt,
-		getMemberRoleStmt:                    q.getMemberRoleStmt,
-		getMessageByIDStmt:                   q.getMessageByIDStmt,
-		getMessageRoomStmt:                   q.getMessageRoomStmt,
-		getMessageSenderStmt:                 q.getMessageSenderStmt,
-		getMessageWithSenderStmt:             q.getMessageWithSenderStmt,
-		getMessagesAfterStmt:                 q.getMessagesAfterStmt,
-		getMessagesBeforeStmt:                q.getMessagesBeforeStmt,
-		getMessagesByIDsStmt:                 q.getMessagesByIDsStmt,
-		getMessagesByRoomStmt:                q.getMessagesByRoomStmt,
-		getMessagesByRoomAscStmt:             q.getMessagesByRoomAscStmt,
-		getMessagesByTimeRangeStmt:           q.getMessagesByTimeRangeStmt,
-		getMessagesByUserStmt:                q.getMessagesByUserStmt,
-		getMessagesByUserInRoomStmt:          q.getMessagesByUserInRoomStmt,
-		getMessagesQuotingThisStmt:           q.getMessagesQuotingThisStmt,
-		getMostActiveFeedbackUsersStmt:       q.getMostActiveFeedbackUsersStmt,
-		getMostActiveUploadersStmt:           q.getMostActiveUploadersStmt,
-		getMostReportedMessagesStmt:          q.getMostReportedMessagesStmt,
-		getMostReportedUsersStmt:             q.getMostReportedUsersStmt,
-		getMuteRecordByIDStmt:                q.getMuteRecordByIDStmt,
-		getMuteRecordsByMemberStmt:           q.getMuteRecordsByMemberStmt,
-		getMuteRecordsByRoomStmt:             q.getMuteRecordsByRoomStmt,
-		getMutedMembersStmt:                  q.getMutedMembersStmt,
-		getMutualFriendsStmt:                 q.getMutualFriendsStmt,
-		getNewFeedbacksStmt:                  q.getNewFeedbacksStmt,
-		getNotificationByIDStmt:              q.getNotificationByIDStmt,
-		getNotificationStatsStmt:             q.getNotificationStatsStmt,
-		getOnlineChatroomMembersStmt:         q.getOnlineChatroomMembersStmt,
-		getOnlineFriendsStmt:                 q.getOnlineFriendsStmt,
-		getOnlineUsersStmt:                   q.getOnlineUsersStmt,
-		getOperatorStatsStmt:                 q.getOperatorStatsStmt,
-		getPendingReceivedRequestsStmt:       q.getPendingReceivedRequestsStmt,
-		getPendingReportsStmt:                q.getPendingReportsStmt,
-		getPendingRequestBetweenUsersStmt:    q.getPendingRequestBetweenUsersStmt,
-		getQuotedMessageStmt:                 q.getQuotedMessageStmt,
-		getReceivedFriendRequestsStmt:        q.getReceivedFriendRequestsStmt,
-		getRecentFeedbackTrendStmt:           q.getRecentFeedbackTrendStmt,
-		getRecentUploadTrendStmt:             q.getRecentUploadTrendStmt,
-		getReportByIDStmt:                    q.getReportByIDStmt,
-		getReportStatsStmt:                   q.getReportStatsStmt,
-		getReportsAgainstTargetStmt:          q.getReportsAgainstTargetStmt,
-		getReportsByReporterStmt:             q.getReportsByReporterStmt,
-		getReportsByStatusStmt:               q.getReportsByStatusStmt,
-		getReportsByTargetTypeStmt:           q.getReportsByTargetTypeStmt,
-		getRoomStorageSizeStmt:               q.getRoomStorageSizeStmt,
-		getSearchableUsersByEmailStmt:        q.getSearchableUsersByEmailStmt,
-		getSearchableUsersByPhoneStmt:        q.getSearchableUsersByPhoneStmt,
-		getSentFriendRequestsStmt:            q.getSentFriendRequestsStmt,
-		getTotalStorageSizeStmt:              q.getTotalStorageSizeStmt,
-		getUnreadMessageCountStmt:            q.getUnreadMessageCountStmt,
-		getUnreadMessagesStmt:                q.getUnreadMessagesStmt,
-		getUnreadNotificationsStmt:           q.getUnreadNotificationsStmt,
-		getUnreadNotificationsByTypeStmt:     q.getUnreadNotificationsByTypeStmt,
-		getUserAvatarsStmt:                   q.getUserAvatarsStmt,
-		getUserByEmailStmt:                   q.getUserByEmailStmt,
-		getUserByIDStmt:                      q.getUserByIDStmt,
-		getUserByUsernameStmt:                q.getUserByUsernameStmt,
-		getUserChatroomMembershipStmt:        q.getUserChatroomMembershipStmt,
-		getUserGlobalMuteExpireTimeStmt:      q.getUserGlobalMuteExpireTimeStmt,
-		getUserLatestAvatarStmt:              q.getUserLatestAvatarStmt,
-		getUserMuteStatusStmt:                q.getUserMuteStatusStmt,
-		getUserNotificationPreferencesStmt:   q.getUserNotificationPreferencesStmt,
-		getUserNotificationsStmt:             q.getUserNotificationsStmt,
-		getUserNotificationsByTypeStmt:       q.getUserNotificationsByTypeStmt,
-		getUserPrivacyPreferencesStmt:        q.getUserPrivacyPreferencesStmt,
-		getUserPublicInfoStmt:                q.getUserPublicInfoStmt,
-		getUserSettingsStmt:                  q.getUserSettingsStmt,
-		getUserStorageSizeStmt:               q.getUserStorageSizeStmt,
-		getUserSystemRoleStmt:                q.getUserSystemRoleStmt,
-		getUserUnreadCountsInAllRoomsStmt:    q.getUserUnreadCountsInAllRoomsStmt,
-		getUsersByIDsStmt:                    q.getUsersByIDsStmt,
-		getUsersWithFriendRequestEnabledStmt: q.getUsersWithFriendRequestEnabledStmt,
-		incrementChatroomMemberCountStmt:     q.incrementChatroomMemberCountStmt,
-		incrementChatroomOnlineCountStmt:     q.incrementChatroomOnlineCountStmt,
-		isChatroomPublicStmt:                 q.isChatroomPublicStmt,
-		isFriendStmt:                         q.isFriendStmt,
-		isMemberMutedStmt:                    q.isMemberMutedStmt,
-		isMemberMutedInRoomStmt:              q.isMemberMutedInRoomStmt,
-		isMessageSenderStmt:                  q.isMessageSenderStmt,
-		isUserAdminStmt:                      q.isUserAdminStmt,
-		isUserAdminOrOwnerStmt:               q.isUserAdminOrOwnerStmt,
-		isUserGloballyMutedStmt:              q.isUserGloballyMutedStmt,
-		isUserInChatroomStmt:                 q.isUserInChatroomStmt,
-		isUserOwnerStmt:                      q.isUserOwnerStmt,
-		isUserSearchableByEmailStmt:          q.isUserSearchableByEmailStmt,
-		isUserSearchableByPhoneStmt:          q.isUserSearchableByPhoneStmt,
-		joinChatroomStmt:                     q.joinChatroomStmt,
-		kickMemberStmt:                       q.kickMemberStmt,
-		leaveChatroomStmt:                    q.leaveChatroomStmt,
-		listPublicChatroomsStmt:              q.listPublicChatroomsStmt,
-		listUserChatroomsStmt:                q.listUserChatroomsStmt,
-		markAllNotificationsAsReadStmt:       q.markAllNotificationsAsReadStmt,
-		markFeedbackAsClosedStmt:             q.markFeedbackAsClosedStmt,
-		markFeedbackAsCompletedStmt:          q.markFeedbackAsCompletedStmt,
-		markFeedbackAsInProgressStmt:         q.markFeedbackAsInProgressStmt,
-		markFeedbackAsReviewedStmt:           q.markFeedbackAsReviewedStmt,
-		markFileAsDeletedStmt:                q.markFileAsDeletedStmt,
-		markNotificationAsReadStmt:           q.markNotificationAsReadStmt,
-		markNotificationsByTypeAsReadStmt:    q.markNotificationsByTypeAsReadStmt,
-		muteMemberStmt:                       q.muteMemberStmt,
-		rejectFriendRequestStmt:              q.rejectFriendRequestStmt,
-		rejectReportStmt:                     q.rejectReportStmt,
-		removeMemberAdminStmt:                q.removeMemberAdminStmt,
-		resolveReportStmt:                    q.resolveReportStmt,
-		restoreDeletedFileStmt:               q.restoreDeletedFileStmt,
-		searchChatroomMembersStmt:            q.searchChatroomMembersStmt,
-		searchChatroomsStmt:                  q.searchChatroomsStmt,
-		searchFeedbacksStmt:                  q.searchFeedbacksStmt,
-		searchFriendsStmt:                    q.searchFriendsStmt,
-		searchMessagesInRoomStmt:             q.searchMessagesInRoomStmt,
-		searchUsersStmt:                      q.searchUsersStmt,
-		setMemberAsAdminStmt:                 q.setMemberAsAdminStmt,
-		setMemberRoleStmt:                    q.setMemberRoleStmt,
-		setUserOfflineStmt:                   q.setUserOfflineStmt,
-		setUserOnlineStmt:                    q.setUserOnlineStmt,
-		setUserSystemRoleStmt:                q.setUserSystemRoleStmt,
-		shouldShowOnlineStatusStmt:           q.shouldShowOnlineStatusStmt,
-		suspendUserStmt:                      q.suspendUserStmt,
-		syncChatroomMemberCountStmt:          q.syncChatroomMemberCountStmt,
-		syncChatroomOnlineCountStmt:          q.syncChatroomOnlineCountStmt,
-		transferOwnershipStmt:                q.transferOwnershipStmt,
-		unmuteMemberStmt:                     q.unmuteMemberStmt,
-		updateAccountStatusStmt:              q.updateAccountStatusStmt,
-		updateChatroomStmt:                   q.updateChatroomStmt,
-		updateChatroomLastActiveTimeStmt:     q.updateChatroomLastActiveTimeStmt,
-		updateFeedbackStatusStmt:             q.updateFeedbackStatusStmt,
-		updateMemberLastReadTimeStmt:         q.updateMemberLastReadTimeStmt,
-		updateMemberLastReadToMessageStmt:    q.updateMemberLastReadToMessageStmt,
-		updateMessageStmt:                    q.updateMessageStmt,
-		updateNotificationSettingsStmt:       q.updateNotificationSettingsStmt,
-		updatePrivacySettingsStmt:            q.updatePrivacySettingsStmt,
-		updateUserStmt:                       q.updateUserStmt,
-		updateUserAvatarStmt:                 q.updateUserAvatarStmt,
-		updateUserLastLoginStmt:              q.updateUserLastLoginStmt,
-		updateUserOnlineStatusStmt:           q.updateUserOnlineStatusStmt,
-		updateUserPasswordStmt:               q.updateUserPasswordStmt,
-		updateUserSettingsStmt:               q.updateUserSettingsStmt,
-		verifyChatroomPasswordStmt:           q.verifyChatroomPasswordStmt,
+		db:                                    tx,
+		tx:                                    tx,
+		acceptFriendRequestStmt:               q.acceptFriendRequestStmt,
+		activateUserStmt:                      q.activateUserStmt,
+		advanceDirectCountersStmt:             q.advanceDirectCountersStmt,
+		advanceDirectReadStmt:                 q.advanceDirectReadStmt,
+		advanceDirectRevisionStmt:             q.advanceDirectRevisionStmt,
+		archiveChatroomStmt:                   q.archiveChatroomStmt,
+		canUserSendMessageInRoomStmt:          q.canUserSendMessageInRoomStmt,
+		cancelFriendRequestStmt:               q.cancelFriendRequestStmt,
+		checkDuplicateReportStmt:              q.checkDuplicateReportStmt,
+		checkEmailExistsStmt:                  q.checkEmailExistsStmt,
+		checkPhoneExistsStmt:                  q.checkPhoneExistsStmt,
+		checkUsernameExistsStmt:               q.checkUsernameExistsStmt,
+		clearExpiredMutesStmt:                 q.clearExpiredMutesStmt,
+		conversationKindStmt:                  q.conversationKindStmt,
+		countAdminLogsStmt:                    q.countAdminLogsStmt,
+		countAdminLogsByOperatorStmt:          q.countAdminLogsByOperatorStmt,
+		countAdminLogsByRoomStmt:              q.countAdminLogsByRoomStmt,
+		countAdminLogsByTypeStmt:              q.countAdminLogsByTypeStmt,
+		countChatroomMembersStmt:              q.countChatroomMembersStmt,
+		countFeedbacksByStatusStmt:            q.countFeedbacksByStatusStmt,
+		countFeedbacksByTypeStmt:              q.countFeedbacksByTypeStmt,
+		countFeedbacksByUserStmt:              q.countFeedbacksByUserStmt,
+		countFilesByContextStmt:               q.countFilesByContextStmt,
+		countFilesByRoomStmt:                  q.countFilesByRoomStmt,
+		countFilesByUploaderStmt:              q.countFilesByUploaderStmt,
+		countFriendsStmt:                      q.countFriendsStmt,
+		countInvitableRoomsStmt:               q.countInvitableRoomsStmt,
+		countInvitationListStmt:               q.countInvitationListStmt,
+		countInvitationsMinuteStmt:            q.countInvitationsMinuteStmt,
+		countInvitationsTodayStmt:             q.countInvitationsTodayStmt,
+		countMessagesInRoomStmt:               q.countMessagesInRoomStmt,
+		countNewFeedbacksStmt:                 q.countNewFeedbacksStmt,
+		countOnlineChatroomMembersStmt:        q.countOnlineChatroomMembersStmt,
+		countOnlineFriendsStmt:                q.countOnlineFriendsStmt,
+		countOnlineUsersStmt:                  q.countOnlineUsersStmt,
+		countPendingInvitationsStmt:           q.countPendingInvitationsStmt,
+		countPendingReceivedRequestsStmt:      q.countPendingReceivedRequestsStmt,
+		countPendingReportsStmt:               q.countPendingReportsStmt,
+		countReceivedFriendRequestsStmt:       q.countReceivedFriendRequestsStmt,
+		countReportsAgainstTargetStmt:         q.countReportsAgainstTargetStmt,
+		countReportsByReporterStmt:            q.countReportsByReporterStmt,
+		countReportsByStatusStmt:              q.countReportsByStatusStmt,
+		countSearchChatroomMembersStmt:        q.countSearchChatroomMembersStmt,
+		countSearchUsersStmt:                  q.countSearchUsersStmt,
+		countSentFriendRequestsStmt:           q.countSentFriendRequestsStmt,
+		countSocialFriendListStmt:             q.countSocialFriendListStmt,
+		countSocialRequestListStmt:            q.countSocialRequestListStmt,
+		countSocialRequestsTodayStmt:          q.countSocialRequestsTodayStmt,
+		countUnreadNotificationsStmt:          q.countUnreadNotificationsStmt,
+		countUnreadNotificationsByTypeStmt:    q.countUnreadNotificationsByTypeStmt,
+		countUserChatroomsStmt:                q.countUserChatroomsStmt,
+		countUserNotificationsStmt:            q.countUserNotificationsStmt,
+		createAdminLogStmt:                    q.createAdminLogStmt,
+		createAnonymousFeedbackStmt:           q.createAnonymousFeedbackStmt,
+		createAvatarRecordStmt:                q.createAvatarRecordStmt,
+		createBanLogStmt:                      q.createBanLogStmt,
+		createBugReportStmt:                   q.createBugReportStmt,
+		createChatImageRecordStmt:             q.createChatImageRecordStmt,
+		createChatroomStmt:                    q.createChatroomStmt,
+		createChatroomNotificationStmt:        q.createChatroomNotificationStmt,
+		createDeleteMessageLogStmt:            q.createDeleteMessageLogStmt,
+		createDirectPairStmt:                  q.createDirectPairStmt,
+		createDirectRoomStmt:                  q.createDirectRoomStmt,
+		createFeatureRequestStmt:              q.createFeatureRequestStmt,
+		createFeedbackStmt:                    q.createFeedbackStmt,
+		createFileRecordStmt:                  q.createFileRecordStmt,
+		createFriendNotificationStmt:          q.createFriendNotificationStmt,
+		createFriendRequestStmt:               q.createFriendRequestStmt,
+		createFriendshipStmt:                  q.createFriendshipStmt,
+		createGlobalMuteRecordStmt:            q.createGlobalMuteRecordStmt,
+		createInvitationStmt:                  q.createInvitationStmt,
+		createKickLogStmt:                     q.createKickLogStmt,
+		createMessageStmt:                     q.createMessageStmt,
+		createMessageReportStmt:               q.createMessageReportStmt,
+		createMuteLogStmt:                     q.createMuteLogStmt,
+		createMuteRecordStmt:                  q.createMuteRecordStmt,
+		createNotificationStmt:                q.createNotificationStmt,
+		createReportStmt:                      q.createReportStmt,
+		createRoleChangeLogStmt:               q.createRoleChangeLogStmt,
+		createSystemNotificationStmt:          q.createSystemNotificationStmt,
+		createUnmuteLogStmt:                   q.createUnmuteLogStmt,
+		createUserStmt:                        q.createUserStmt,
+		createUserReportStmt:                  q.createUserReportStmt,
+		createUserSettingsStmt:                q.createUserSettingsStmt,
+		deactivateGlobalMuteRecordStmt:        q.deactivateGlobalMuteRecordStmt,
+		deactivateGlobalMuteRecordByIDStmt:    q.deactivateGlobalMuteRecordByIDStmt,
+		deactivateGroupMembersStmt:            q.deactivateGroupMembersStmt,
+		deactivateMuteRecordStmt:              q.deactivateMuteRecordStmt,
+		deactivateMuteRecordByIDStmt:          q.deactivateMuteRecordByIDStmt,
+		decrementChatroomMemberCountStmt:      q.decrementChatroomMemberCountStmt,
+		decrementChatroomOnlineCountStmt:      q.decrementChatroomOnlineCountStmt,
+		deleteChatroomStmt:                    q.deleteChatroomStmt,
+		deleteFeedbackStmt:                    q.deleteFeedbackStmt,
+		deleteFileRecordStmt:                  q.deleteFileRecordStmt,
+		deleteFilesByUploaderStmt:             q.deleteFilesByUploaderStmt,
+		deleteFriendshipStmt:                  q.deleteFriendshipStmt,
+		deleteMessageStmt:                     q.deleteMessageStmt,
+		deleteMessageSoftStmt:                 q.deleteMessageSoftStmt,
+		deleteMessagesByRoomStmt:              q.deleteMessagesByRoomStmt,
+		deleteMessagesByUserStmt:              q.deleteMessagesByUserStmt,
+		deleteMessagesByUserInRoomStmt:        q.deleteMessagesByUserInRoomStmt,
+		deleteNotificationStmt:                q.deleteNotificationStmt,
+		deleteOldDeletedFilesStmt:             q.deleteOldDeletedFilesStmt,
+		deleteOldFeedbacksStmt:                q.deleteOldFeedbacksStmt,
+		deleteOldNotificationsStmt:            q.deleteOldNotificationsStmt,
+		deleteReadNotificationsStmt:           q.deleteReadNotificationsStmt,
+		deleteReportStmt:                      q.deleteReportStmt,
+		deleteUserAccountStmt:                 q.deleteUserAccountStmt,
+		deleteUserSettingsStmt:                q.deleteUserSettingsStmt,
+		directActivityStmt:                    q.directActivityStmt,
+		directChangesStmt:                     q.directChangesStmt,
+		directConversationListStmt:            q.directConversationListStmt,
+		directHistoryAfterStmt:                q.directHistoryAfterStmt,
+		directHistoryBeforeStmt:               q.directHistoryBeforeStmt,
+		directMessageByIDStmt:                 q.directMessageByIDStmt,
+		directMessageByKeyStmt:                q.directMessageByKeyStmt,
+		directPairByRoomStmt:                  q.directPairByRoomStmt,
+		directReadPositionStmt:                q.directReadPositionStmt,
+		directUnreadStmt:                      q.directUnreadStmt,
+		editDirectMessageStmt:                 q.editDirectMessageStmt,
+		effectiveInvitationStatusStmt:         q.effectiveInvitationStatusStmt,
+		expireGlobalMuteRecordsStmt:           q.expireGlobalMuteRecordsStmt,
+		expireInvitationsStmt:                 q.expireInvitationsStmt,
+		expireMuteRecordsStmt:                 q.expireMuteRecordsStmt,
+		getActiveGlobalMuteRecordStmt:         q.getActiveGlobalMuteRecordStmt,
+		getActiveMembershipStmt:               q.getActiveMembershipStmt,
+		getActiveMuteRecordStmt:               q.getActiveMuteRecordStmt,
+		getActiveMuteRecordsByRoomStmt:        q.getActiveMuteRecordsByRoomStmt,
+		getAdminLogByIDStmt:                   q.getAdminLogByIDStmt,
+		getAdminLogStatsStmt:                  q.getAdminLogStatsStmt,
+		getAdminLogsStmt:                      q.getAdminLogsStmt,
+		getAdminLogsByOperatorStmt:            q.getAdminLogsByOperatorStmt,
+		getAdminLogsByRoomStmt:                q.getAdminLogsByRoomStmt,
+		getAdminLogsByTimeRangeStmt:           q.getAdminLogsByTimeRangeStmt,
+		getAdminLogsByTypeStmt:                q.getAdminLogsByTypeStmt,
+		getAdminLogsByUserStmt:                q.getAdminLogsByUserStmt,
+		getAllActiveGlobalMuteRecordsStmt:     q.getAllActiveGlobalMuteRecordsStmt,
+		getAllFeedbacksStmt:                   q.getAllFeedbacksStmt,
+		getChatroomAdminsStmt:                 q.getChatroomAdminsStmt,
+		getChatroomByIDStmt:                   q.getChatroomByIDStmt,
+		getChatroomInvitationStmt:             q.getChatroomInvitationStmt,
+		getChatroomMembersStmt:                q.getChatroomMembersStmt,
+		getChatroomOwnerStmt:                  q.getChatroomOwnerStmt,
+		getChatroomWithoutPasswordStmt:        q.getChatroomWithoutPasswordStmt,
+		getDirectPairStmt:                     q.getDirectPairStmt,
+		getFeedbackByIDStmt:                   q.getFeedbackByIDStmt,
+		getFeedbackStatsStmt:                  q.getFeedbackStatsStmt,
+		getFeedbacksByStatusStmt:              q.getFeedbacksByStatusStmt,
+		getFeedbacksByTypeStmt:                q.getFeedbacksByTypeStmt,
+		getFeedbacksByUserStmt:                q.getFeedbacksByUserStmt,
+		getFileByIDStmt:                       q.getFileByIDStmt,
+		getFileByPathStmt:                     q.getFileByPathStmt,
+		getFileStatsStmt:                      q.getFileStatsStmt,
+		getFilesByContextStmt:                 q.getFilesByContextStmt,
+		getFilesByRoomStmt:                    q.getFilesByRoomStmt,
+		getFilesByUploaderStmt:                q.getFilesByUploaderStmt,
+		getFriendRequestByIDStmt:              q.getFriendRequestByIDStmt,
+		getFriendsStmt:                        q.getFriendsStmt,
+		getGlobalAdminLogsStmt:                q.getGlobalAdminLogsStmt,
+		getGlobalMuteRecordByIDStmt:           q.getGlobalMuteRecordByIDStmt,
+		getGlobalMuteRecordsByUserStmt:        q.getGlobalMuteRecordsByUserStmt,
+		getLargestFilesStmt:                   q.getLargestFilesStmt,
+		getLastMessageInRoomStmt:              q.getLastMessageInRoomStmt,
+		getLatestMessagesStmt:                 q.getLatestMessagesStmt,
+		getMemberByRelIDStmt:                  q.getMemberByRelIDStmt,
+		getMemberLastReadTimeStmt:             q.getMemberLastReadTimeStmt,
+		getMemberMuteExpireTimeStmt:           q.getMemberMuteExpireTimeStmt,
+		getMemberRoleStmt:                     q.getMemberRoleStmt,
+		getMessageByIDStmt:                    q.getMessageByIDStmt,
+		getMessageRoomStmt:                    q.getMessageRoomStmt,
+		getMessageSenderStmt:                  q.getMessageSenderStmt,
+		getMessageWithSenderStmt:              q.getMessageWithSenderStmt,
+		getMessagesAfterStmt:                  q.getMessagesAfterStmt,
+		getMessagesBeforeStmt:                 q.getMessagesBeforeStmt,
+		getMessagesByIDsStmt:                  q.getMessagesByIDsStmt,
+		getMessagesByRoomStmt:                 q.getMessagesByRoomStmt,
+		getMessagesByRoomAscStmt:              q.getMessagesByRoomAscStmt,
+		getMessagesByTimeRangeStmt:            q.getMessagesByTimeRangeStmt,
+		getMessagesByUserStmt:                 q.getMessagesByUserStmt,
+		getMessagesByUserInRoomStmt:           q.getMessagesByUserInRoomStmt,
+		getMessagesQuotingThisStmt:            q.getMessagesQuotingThisStmt,
+		getMostActiveFeedbackUsersStmt:        q.getMostActiveFeedbackUsersStmt,
+		getMostActiveUploadersStmt:            q.getMostActiveUploadersStmt,
+		getMostReportedMessagesStmt:           q.getMostReportedMessagesStmt,
+		getMostReportedUsersStmt:              q.getMostReportedUsersStmt,
+		getMuteRecordByIDStmt:                 q.getMuteRecordByIDStmt,
+		getMuteRecordsByMemberStmt:            q.getMuteRecordsByMemberStmt,
+		getMuteRecordsByRoomStmt:              q.getMuteRecordsByRoomStmt,
+		getMutedMembersStmt:                   q.getMutedMembersStmt,
+		getMutualFriendsStmt:                  q.getMutualFriendsStmt,
+		getNewFeedbacksStmt:                   q.getNewFeedbacksStmt,
+		getNotificationByIDStmt:               q.getNotificationByIDStmt,
+		getNotificationStatsStmt:              q.getNotificationStatsStmt,
+		getOnlineChatroomMembersStmt:          q.getOnlineChatroomMembersStmt,
+		getOnlineFriendsStmt:                  q.getOnlineFriendsStmt,
+		getOnlineUsersStmt:                    q.getOnlineUsersStmt,
+		getOperatorStatsStmt:                  q.getOperatorStatsStmt,
+		getPendingReceivedRequestsStmt:        q.getPendingReceivedRequestsStmt,
+		getPendingReportsStmt:                 q.getPendingReportsStmt,
+		getPendingRequestBetweenUsersStmt:     q.getPendingRequestBetweenUsersStmt,
+		getQuotedMessageStmt:                  q.getQuotedMessageStmt,
+		getReceivedFriendRequestsStmt:         q.getReceivedFriendRequestsStmt,
+		getRecentFeedbackTrendStmt:            q.getRecentFeedbackTrendStmt,
+		getRecentUploadTrendStmt:              q.getRecentUploadTrendStmt,
+		getReportByIDStmt:                     q.getReportByIDStmt,
+		getReportStatsStmt:                    q.getReportStatsStmt,
+		getReportsAgainstTargetStmt:           q.getReportsAgainstTargetStmt,
+		getReportsByReporterStmt:              q.getReportsByReporterStmt,
+		getReportsByStatusStmt:                q.getReportsByStatusStmt,
+		getReportsByTargetTypeStmt:            q.getReportsByTargetTypeStmt,
+		getRoomStorageSizeStmt:                q.getRoomStorageSizeStmt,
+		getSearchableUsersByEmailStmt:         q.getSearchableUsersByEmailStmt,
+		getSearchableUsersByPhoneStmt:         q.getSearchableUsersByPhoneStmt,
+		getSentFriendRequestsStmt:             q.getSentFriendRequestsStmt,
+		getTotalStorageSizeStmt:               q.getTotalStorageSizeStmt,
+		getUnreadMessageCountStmt:             q.getUnreadMessageCountStmt,
+		getUnreadMessagesStmt:                 q.getUnreadMessagesStmt,
+		getUnreadNotificationsStmt:            q.getUnreadNotificationsStmt,
+		getUnreadNotificationsByTypeStmt:      q.getUnreadNotificationsByTypeStmt,
+		getUserAvatarsStmt:                    q.getUserAvatarsStmt,
+		getUserByEmailStmt:                    q.getUserByEmailStmt,
+		getUserByIDStmt:                       q.getUserByIDStmt,
+		getUserByUsernameStmt:                 q.getUserByUsernameStmt,
+		getUserChatroomMembershipStmt:         q.getUserChatroomMembershipStmt,
+		getUserGlobalMuteExpireTimeStmt:       q.getUserGlobalMuteExpireTimeStmt,
+		getUserLatestAvatarStmt:               q.getUserLatestAvatarStmt,
+		getUserMuteStatusStmt:                 q.getUserMuteStatusStmt,
+		getUserNotificationPreferencesStmt:    q.getUserNotificationPreferencesStmt,
+		getUserNotificationsStmt:              q.getUserNotificationsStmt,
+		getUserNotificationsByTypeStmt:        q.getUserNotificationsByTypeStmt,
+		getUserPrivacyPreferencesStmt:         q.getUserPrivacyPreferencesStmt,
+		getUserPublicInfoStmt:                 q.getUserPublicInfoStmt,
+		getUserSettingsStmt:                   q.getUserSettingsStmt,
+		getUserStorageSizeStmt:                q.getUserStorageSizeStmt,
+		getUserSystemRoleStmt:                 q.getUserSystemRoleStmt,
+		getUserUnreadCountsInAllRoomsStmt:     q.getUserUnreadCountsInAllRoomsStmt,
+		getUsersByIDsStmt:                     q.getUsersByIDsStmt,
+		getUsersWithFriendRequestEnabledStmt:  q.getUsersWithFriendRequestEnabledStmt,
+		groupActiveMembersStmt:                q.groupActiveMembersStmt,
+		groupManagersStmt:                     q.groupManagersStmt,
+		incrementChatroomMemberCountStmt:      q.incrementChatroomMemberCountStmt,
+		incrementChatroomOnlineCountStmt:      q.incrementChatroomOnlineCountStmt,
+		insertDirectMessageStmt:               q.insertDirectMessageStmt,
+		invalidateFriendInvitationsStmt:       q.invalidateFriendInvitationsStmt,
+		invalidateMemberInvitationsStmt:       q.invalidateMemberInvitationsStmt,
+		invalidateRoomInvitationsStmt:         q.invalidateRoomInvitationsStmt,
+		invalidateUnauthorizedInvitationsStmt: q.invalidateUnauthorizedInvitationsStmt,
+		invitableRoomsStmt:                    q.invitableRoomsStmt,
+		invitationClockStmt:                   q.invitationClockStmt,
+		invitationListStmt:                    q.invitationListStmt,
+		isChatroomPublicStmt:                  q.isChatroomPublicStmt,
+		isFriendStmt:                          q.isFriendStmt,
+		isMemberMutedStmt:                     q.isMemberMutedStmt,
+		isMemberMutedInRoomStmt:               q.isMemberMutedInRoomStmt,
+		isMessageSenderStmt:                   q.isMessageSenderStmt,
+		isUserAdminStmt:                       q.isUserAdminStmt,
+		isUserAdminOrOwnerStmt:                q.isUserAdminOrOwnerStmt,
+		isUserGloballyMutedStmt:               q.isUserGloballyMutedStmt,
+		isUserInChatroomStmt:                  q.isUserInChatroomStmt,
+		isUserOwnerStmt:                       q.isUserOwnerStmt,
+		isUserSearchableByEmailStmt:           q.isUserSearchableByEmailStmt,
+		isUserSearchableByPhoneStmt:           q.isUserSearchableByPhoneStmt,
+		joinChatroomStmt:                      q.joinChatroomStmt,
+		kickMemberStmt:                        q.kickMemberStmt,
+		latestDirectMessageStmt:               q.latestDirectMessageStmt,
+		latestInvitationStmt:                  q.latestInvitationStmt,
+		latestSocialRequestStmt:               q.latestSocialRequestStmt,
+		leaveChatroomStmt:                     q.leaveChatroomStmt,
+		listPublicChatroomsStmt:               q.listPublicChatroomsStmt,
+		listUserChatroomsStmt:                 q.listUserChatroomsStmt,
+		lockDirectRoomStmt:                    q.lockDirectRoomStmt,
+		lockFreeGroupRoomStmt:                 q.lockFreeGroupRoomStmt,
+		lockGroupRoomStmt:                     q.lockGroupRoomStmt,
+		lockInvitationStmt:                    q.lockInvitationStmt,
+		lockSocialPairStmt:                    q.lockSocialPairStmt,
+		lockSocialRequestStmt:                 q.lockSocialRequestStmt,
+		markAllNotificationsAsReadStmt:        q.markAllNotificationsAsReadStmt,
+		markFeedbackAsClosedStmt:              q.markFeedbackAsClosedStmt,
+		markFeedbackAsCompletedStmt:           q.markFeedbackAsCompletedStmt,
+		markFeedbackAsInProgressStmt:          q.markFeedbackAsInProgressStmt,
+		markFeedbackAsReviewedStmt:            q.markFeedbackAsReviewedStmt,
+		markFileAsDeletedStmt:                 q.markFileAsDeletedStmt,
+		markNotificationAsReadStmt:            q.markNotificationAsReadStmt,
+		markNotificationsByTypeAsReadStmt:     q.markNotificationsByTypeAsReadStmt,
+		muteMemberStmt:                        q.muteMemberStmt,
+		pendingInvitationStmt:                 q.pendingInvitationStmt,
+		recordDirectChangeStmt:                q.recordDirectChangeStmt,
+		rejectFriendRequestStmt:               q.rejectFriendRequestStmt,
+		rejectReportStmt:                      q.rejectReportStmt,
+		removeMemberAdminStmt:                 q.removeMemberAdminStmt,
+		resetDeletedGroupCountsStmt:           q.resetDeletedGroupCountsStmt,
+		resolveReportStmt:                     q.resolveReportStmt,
+		restoreDeletedFileStmt:                q.restoreDeletedFileStmt,
+		searchChatroomMembersStmt:             q.searchChatroomMembersStmt,
+		searchChatroomsStmt:                   q.searchChatroomsStmt,
+		searchFeedbacksStmt:                   q.searchFeedbacksStmt,
+		searchFriendsStmt:                     q.searchFriendsStmt,
+		searchMessagesInRoomStmt:              q.searchMessagesInRoomStmt,
+		searchSocialUserStmt:                  q.searchSocialUserStmt,
+		searchUsersStmt:                       q.searchUsersStmt,
+		setMemberAsAdminStmt:                  q.setMemberAsAdminStmt,
+		setMemberRoleStmt:                     q.setMemberRoleStmt,
+		setSocialRequestStatusStmt:            q.setSocialRequestStatusStmt,
+		setUserOfflineStmt:                    q.setUserOfflineStmt,
+		setUserOnlineStmt:                     q.setUserOnlineStmt,
+		setUserSystemRoleStmt:                 q.setUserSystemRoleStmt,
+		shouldShowOnlineStatusStmt:            q.shouldShowOnlineStatusStmt,
+		socialFriendListStmt:                  q.socialFriendListStmt,
+		socialFriendSinceStmt:                 q.socialFriendSinceStmt,
+		socialProfileStmt:                     q.socialProfileStmt,
+		socialRequestListStmt:                 q.socialRequestListStmt,
+		staleInvitationsStmt:                  q.staleInvitationsStmt,
+		suspendUserStmt:                       q.suspendUserStmt,
+		syncChatroomMemberCountStmt:           q.syncChatroomMemberCountStmt,
+		syncChatroomOnlineCountStmt:           q.syncChatroomOnlineCountStmt,
+		totalDirectUnreadStmt:                 q.totalDirectUnreadStmt,
+		touchDirectRoomStmt:                   q.touchDirectRoomStmt,
+		transferOwnershipStmt:                 q.transferOwnershipStmt,
+		transitionInvitationStmt:              q.transitionInvitationStmt,
+		unmuteMemberStmt:                      q.unmuteMemberStmt,
+		updateAccountStatusStmt:               q.updateAccountStatusStmt,
+		updateChatroomStmt:                    q.updateChatroomStmt,
+		updateChatroomLastActiveTimeStmt:      q.updateChatroomLastActiveTimeStmt,
+		updateFeedbackStatusStmt:              q.updateFeedbackStatusStmt,
+		updateMemberLastReadTimeStmt:          q.updateMemberLastReadTimeStmt,
+		updateMemberLastReadToMessageStmt:     q.updateMemberLastReadToMessageStmt,
+		updateMessageStmt:                     q.updateMessageStmt,
+		updateNotificationSettingsStmt:        q.updateNotificationSettingsStmt,
+		updatePrivacySettingsStmt:             q.updatePrivacySettingsStmt,
+		updateUserStmt:                        q.updateUserStmt,
+		updateUserAvatarStmt:                  q.updateUserAvatarStmt,
+		updateUserLastLoginStmt:               q.updateUserLastLoginStmt,
+		updateUserOnlineStatusStmt:            q.updateUserOnlineStatusStmt,
+		updateUserPasswordStmt:                q.updateUserPasswordStmt,
+		updateUserSettingsStmt:                q.updateUserSettingsStmt,
+		verifyChatroomPasswordStmt:            q.verifyChatroomPasswordStmt,
+		withdrawDirectMessageStmt:             q.withdrawDirectMessageStmt,
 	}
 }

@@ -95,7 +95,6 @@ var (
 // InitDBLogger 初始化全局数据库日志记录器
 func InitDBLogger(config *DBLoggerConfig) error {
 	var initErr error
-	dbLoggerOnce = sync.Once{} // 允许重新初始化
 	dbLoggerOnce.Do(func() {
 		if config == nil {
 			config = DefaultDBLoggerConfig()
@@ -129,9 +128,8 @@ func InitDBLogger(config *DBLoggerConfig) error {
 
 // GetDBLogger 获取全局数据库日志记录器
 func GetDBLogger() *DBLogger {
-	if globalDBLogger == nil {
-		InitDBLogger(nil)
-	}
+	// sync.Once publishes the fully initialized logger to every concurrent reader.
+	_ = InitDBLogger(nil)
 	return globalDBLogger
 }
 
@@ -284,7 +282,7 @@ func (l *DBLogger) LogQuery(operation, query string, args []interface{}, duratio
 		Level:        DBLogLevelInfo,
 		Operation:    operation,
 		Query:        query,
-		Args:         args,
+		Args:         nil, // Never persist passwords, contact details or message bodies.
 		Duration:     duration,
 		RowsAffected: -1,
 	}
@@ -297,7 +295,7 @@ func (l *DBLogger) LogQuery(operation, query string, args []interface{}, duratio
 
 	if err != nil {
 		entry.Level = DBLogLevelError
-		entry.Error = err.Error()
+		entry.Error = fmt.Sprintf("%T", err)
 	}
 
 	l.Log(entry)
@@ -310,7 +308,7 @@ func (l *DBLogger) LogExec(operation, query string, args []interface{}, duration
 		Level:        DBLogLevelInfo,
 		Operation:    operation,
 		Query:        query,
-		Args:         args,
+		Args:         nil, // Never persist passwords, contact details or message bodies.
 		Duration:     duration,
 		RowsAffected: rowsAffected,
 	}
@@ -322,7 +320,7 @@ func (l *DBLogger) LogExec(operation, query string, args []interface{}, duration
 
 	if err != nil {
 		entry.Level = DBLogLevelError
-		entry.Error = err.Error()
+		entry.Error = fmt.Sprintf("%T", err)
 	}
 
 	l.Log(entry)
@@ -367,7 +365,7 @@ func (l *DBLogger) Error(operation string, message string, err error) {
 		Query:     message,
 	}
 	if err != nil {
-		entry.Error = err.Error()
+		entry.Error = fmt.Sprintf("%T", err)
 	}
 	l.Log(entry)
 }

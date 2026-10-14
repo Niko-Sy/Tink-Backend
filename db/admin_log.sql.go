@@ -563,8 +563,8 @@ LIMIT $1 OFFSET $2
 `
 
 type GetAdminLogsParams struct {
-	Limit  int64 `json:"limit"`
-	Offset int64 `json:"offset"`
+	Limit  int32 `json:"limit"`
+	Offset int32 `json:"offset"`
 }
 
 type GetAdminLogsRow struct {
@@ -643,8 +643,8 @@ LIMIT $2 OFFSET $3
 
 type GetAdminLogsByOperatorParams struct {
 	OperatorUserID sql.NullString `json:"operator_user_id"`
-	Limit          int64          `json:"limit"`
-	Offset         int64          `json:"offset"`
+	Limit          int32          `json:"limit"`
+	Offset         int32          `json:"offset"`
 }
 
 type GetAdminLogsByOperatorRow struct {
@@ -722,8 +722,8 @@ LIMIT $2 OFFSET $3
 
 type GetAdminLogsByRoomParams struct {
 	RelatedRoomID sql.NullString `json:"related_room_id"`
-	Limit         int64          `json:"limit"`
-	Offset        int64          `json:"offset"`
+	Limit         int32          `json:"limit"`
+	Offset        int32          `json:"offset"`
 }
 
 type GetAdminLogsByRoomRow struct {
@@ -806,8 +806,8 @@ LIMIT $3 OFFSET $4
 type GetAdminLogsByTimeRangeParams struct {
 	OperatedAt   time.Time `json:"operated_at"`
 	OperatedAt_2 time.Time `json:"operated_at_2"`
-	Limit        int64     `json:"limit"`
-	Offset       int64     `json:"offset"`
+	Limit        int32     `json:"limit"`
+	Offset       int32     `json:"offset"`
 }
 
 type GetAdminLogsByTimeRangeRow struct {
@@ -894,8 +894,8 @@ LIMIT $2 OFFSET $3
 
 type GetAdminLogsByTypeParams struct {
 	OperationType string `json:"operation_type"`
-	Limit         int64  `json:"limit"`
-	Offset        int64  `json:"offset"`
+	Limit         int32  `json:"limit"`
+	Offset        int32  `json:"offset"`
 }
 
 type GetAdminLogsByTypeRow struct {
@@ -974,8 +974,8 @@ LIMIT $2 OFFSET $3
 
 type GetAdminLogsByUserParams struct {
 	RelatedUserID sql.NullString `json:"related_user_id"`
-	Limit         int64          `json:"limit"`
-	Offset        int64          `json:"offset"`
+	Limit         int32          `json:"limit"`
+	Offset        int32          `json:"offset"`
 }
 
 type GetAdminLogsByUserRow struct {
@@ -1052,8 +1052,8 @@ LIMIT $1 OFFSET $2
 `
 
 type GetGlobalAdminLogsParams struct {
-	Limit  int64 `json:"limit"`
-	Offset int64 `json:"offset"`
+	Limit  int32 `json:"limit"`
+	Offset int32 `json:"offset"`
 }
 
 type GetGlobalAdminLogsRow struct {
@@ -1131,7 +1131,7 @@ type GetOperatorStatsRow struct {
 }
 
 // 获取各操作员的操作统计
-func (q *Queries) GetOperatorStats(ctx context.Context, limit int64) ([]GetOperatorStatsRow, error) {
+func (q *Queries) GetOperatorStats(ctx context.Context, limit int32) ([]GetOperatorStatsRow, error) {
 	rows, err := q.query(ctx, q.getOperatorStatsStmt, getOperatorStats, limit)
 	if err != nil {
 		return nil, err

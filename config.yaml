@@ -11,6 +11,12 @@ server:
   port: 8080
   host: "0.0.0.0"
   base_url: "http://120.27.227.190:8080"
+  allowed_origins:
+    - "http://120.27.227.190"
+    - "http://120.27.227.190:11451"
+    - "http://120.27.227.190:8080"
+    - "http://127.0.0.1:11451"
+    - "http://localhost:11451"
 
 # 图片上传配置
 upload:
@@ -26,8 +32,9 @@ upload:
 
 # JWT 配置
 jwt:
-  secret: "your-secret-key-change-in-production"
+  secret: "zIkOpjHTvIHUZabGPr4wPGADXdCMDZauFaZIjbeZ5YI"
   expiration: 86400  # 24小时 (秒)
+  refresh_expiration: 604800  # 7天，秒
 
 # WebSocket 配置
 websocket:
@@ -43,3 +50,8 @@ logger:
   enable_console: true
   enable_file: true
   max_age: 30  # 日志保留天数
+# 个人项目：好友、私信与群邀请直接开启
+social:
+  friends: true
+  direct_messages: true
+  room_invitations: true

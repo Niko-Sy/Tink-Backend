@@ -15,6 +15,7 @@ type Config struct {
 	JWT       JWTConfig       `yaml:"jwt"`
 	WebSocket WebSocketConfig `yaml:"websocket"`
 	Logger    LoggerConfig    `yaml:"logger"`
+	Social    SocialConfig    `yaml:"social"`
 }
 
 // DatabaseConfig 数据库配置
@@ -27,9 +28,16 @@ type DatabaseConfig struct {
 
 // ServerConfig 服务器配置
 type ServerConfig struct {
-	Port    int    `yaml:"port"`
-	Host    string `yaml:"host"`
-	BaseURL string `yaml:"base_url"`
+	Port           int      `yaml:"port"`
+	Host           string   `yaml:"host"`
+	BaseURL        string   `yaml:"base_url"`
+	AllowedOrigins []string `yaml:"allowed_origins"`
+}
+
+type SocialConfig struct {
+	Friends         bool `yaml:"friends"`
+	DirectMessages  bool `yaml:"direct_messages"`
+	RoomInvitations bool `yaml:"room_invitations"`
 }
 
 // UploadConfig 上传配置
@@ -43,8 +51,9 @@ type UploadConfig struct {
 
 // JWTConfig JWT 配置
 type JWTConfig struct {
-	Secret     string `yaml:"secret"`
-	Expiration int    `yaml:"expiration"` // 秒
+	Secret            string `yaml:"secret"`
+	Expiration        int    `yaml:"expiration"`         // 秒
+	RefreshExpiration int    `yaml:"refresh_expiration"` // 秒
 }
 
 // WebSocketConfig WebSocket 配置
@@ -75,20 +84,9 @@ func LoadConfig(configPath string) (*Config, error) {
 	}
 
 	// 解析 YAML
-	var cfg Config
+	cfg := Config{Social: SocialConfig{Friends: true, DirectMessages: true, RoomInvitations: true}, JWT: JWTConfig{Expiration: 86400, RefreshExpiration: 604800}}
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		return nil, fmt.Errorf("解析配置文件失败: %w", err)
-	}
-
-	// 环境变量覆盖
-	if dbURL := os.Getenv("DATABASE_URL"); dbURL != "" {
-		cfg.Database.URL = dbURL
-	}
-	if baseURL := os.Getenv("BASE_URL"); baseURL != "" {
-		cfg.Server.BaseURL = baseURL
-	}
-	if jwtSecret := os.Getenv("JWT_SECRET"); jwtSecret != "" {
-		cfg.JWT.Secret = jwtSecret
 	}
 
 	globalConfig = &cfg

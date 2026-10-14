@@ -330,7 +330,7 @@ type GetMostReportedMessagesRow struct {
 }
 
 // 获取被举报次数最多的消息
-func (q *Queries) GetMostReportedMessages(ctx context.Context, limit int64) ([]GetMostReportedMessagesRow, error) {
+func (q *Queries) GetMostReportedMessages(ctx context.Context, limit int32) ([]GetMostReportedMessagesRow, error) {
 	rows, err := q.query(ctx, q.getMostReportedMessagesStmt, getMostReportedMessages, limit)
 	if err != nil {
 		return nil, err
@@ -370,7 +370,7 @@ type GetMostReportedUsersRow struct {
 }
 
 // 获取被举报次数最多的用户
-func (q *Queries) GetMostReportedUsers(ctx context.Context, limit int64) ([]GetMostReportedUsersRow, error) {
+func (q *Queries) GetMostReportedUsers(ctx context.Context, limit int32) ([]GetMostReportedUsersRow, error) {
 	rows, err := q.query(ctx, q.getMostReportedUsersStmt, getMostReportedUsers, limit)
 	if err != nil {
 		return nil, err
@@ -416,8 +416,8 @@ LIMIT $1 OFFSET $2
 `
 
 type GetPendingReportsParams struct {
-	Limit  int64 `json:"limit"`
-	Offset int64 `json:"offset"`
+	Limit  int32 `json:"limit"`
+	Offset int32 `json:"offset"`
 }
 
 type GetPendingReportsRow struct {
@@ -630,8 +630,8 @@ LIMIT $2 OFFSET $3
 
 type GetReportsByReporterParams struct {
 	ReporterID string `json:"reporter_id"`
-	Limit      int64  `json:"limit"`
-	Offset     int64  `json:"offset"`
+	Limit      int32  `json:"limit"`
+	Offset     int32  `json:"offset"`
 }
 
 // 获取用户提交的举报列表
@@ -694,8 +694,8 @@ LIMIT $2 OFFSET $3
 
 type GetReportsByStatusParams struct {
 	Status ReportStatus `json:"status"`
-	Limit  int64        `json:"limit"`
-	Offset int64        `json:"offset"`
+	Limit  int32        `json:"limit"`
+	Offset int32        `json:"offset"`
 }
 
 type GetReportsByStatusRow struct {
@@ -776,8 +776,8 @@ LIMIT $2 OFFSET $3
 
 type GetReportsByTargetTypeParams struct {
 	TargetType ReportType `json:"target_type"`
-	Limit      int64      `json:"limit"`
-	Offset     int64      `json:"offset"`
+	Limit      int32      `json:"limit"`
+	Offset     int32      `json:"offset"`
 }
 
 type GetReportsByTargetTypeRow struct {

@@ -147,8 +147,8 @@ func HandleListRoomMembers(c *gin.Context) {
 	// 获取成员列表
 	members, err := queries.GetChatroomMembers(c.Request.Context(), sqlcdb.GetChatroomMembersParams{
 		RoomID: roomId,
-		Limit:  int64(pageSize),
-		Offset: int64(offset),
+		Limit:  int32(pageSize),
+		Offset: int32(offset),
 	})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{

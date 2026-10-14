@@ -6,8 +6,6 @@ sql:
       - "./dbsql/query/"
       - "./dbsql/extension/"
     schema: "./dbsql/migration/"
-    database:
-      uri: "postgres://postgres:sy20050401@120.27.227.190:5432/chatroom?sslmode=disable"
     gen:
       go:
         package: "db"

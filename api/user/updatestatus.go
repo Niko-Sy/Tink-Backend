@@ -1,6 +1,7 @@
 package user
 
 import (
+	"chatroombackend/api/websocketmsg"
 	sqlcdb "chatroombackend/db"
 	"chatroombackend/middleware"
 	"net/http"
@@ -80,6 +81,7 @@ func HandleUpdateUserStatus(c *gin.Context) {
 		return
 	}
 
+	websocketmsg.PublishPresence(currentUserID)
 	c.JSON(http.StatusOK, gin.H{
 		"code":    200,
 		"message": "状态更新成功",

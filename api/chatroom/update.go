@@ -74,7 +74,7 @@ func HandleUpdateRoom(c *gin.Context) {
 	}
 
 	// 检查聊天室是否存在
-	_, err = queries.GetChatroomByID(c.Request.Context(), roomId)
+	chatroom, err := queries.GetChatroomByID(c.Request.Context(), roomId)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			c.JSON(http.StatusNotFound, gin.H{
@@ -142,7 +142,9 @@ func HandleUpdateRoom(c *gin.Context) {
 
 	// 构建更新参数
 	updateParams := sqlcdb.UpdateChatroomParams{
-		RoomID: roomId,
+		Column1:  roomId,
+		RoomName: chatroom.RoomName,
+		RoomType: chatroom.RoomType,
 	}
 
 	if req.Name != nil {

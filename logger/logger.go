@@ -82,7 +82,6 @@ var (
 // InitAppLogger 初始化全局应用日志
 func InitAppLogger(config *AppLoggerConfig) error {
 	var initErr error
-	appLoggerOnce = sync.Once{}
 	appLoggerOnce.Do(func() {
 		if config == nil {
 			config = DefaultAppLoggerConfig()
@@ -112,9 +111,8 @@ func InitAppLogger(config *AppLoggerConfig) error {
 
 // GetAppLogger 获取全局应用日志
 func GetAppLogger() *AppLogger {
-	if globalAppLogger == nil {
-		InitAppLogger(nil)
-	}
+	// sync.Once publishes the fully initialized logger to every concurrent reader.
+	_ = InitAppLogger(nil)
 	return globalAppLogger
 }
 

@@ -412,8 +412,8 @@ LIMIT $2 OFFSET $3
 
 type GetUnreadNotificationsParams struct {
 	UserID string `json:"user_id"`
-	Limit  int64  `json:"limit"`
-	Offset int64  `json:"offset"`
+	Limit  int32  `json:"limit"`
+	Offset int32  `json:"offset"`
 }
 
 // 获取未读通知 GET /users/me/notifications?status=unread
@@ -468,8 +468,8 @@ LIMIT $3 OFFSET $4
 type GetUnreadNotificationsByTypeParams struct {
 	UserID string           `json:"user_id"`
 	Type   NotificationType `json:"type"`
-	Limit  int64            `json:"limit"`
-	Offset int64            `json:"offset"`
+	Limit  int32            `json:"limit"`
+	Offset int32            `json:"offset"`
 }
 
 // 按类型获取未读通知
@@ -528,8 +528,8 @@ LIMIT $2 OFFSET $3
 
 type GetUserNotificationsParams struct {
 	UserID string `json:"user_id"`
-	Limit  int64  `json:"limit"`
-	Offset int64  `json:"offset"`
+	Limit  int32  `json:"limit"`
+	Offset int32  `json:"offset"`
 }
 
 // 获取用户通知列表 GET /users/me/notifications
@@ -584,8 +584,8 @@ LIMIT $3 OFFSET $4
 type GetUserNotificationsByTypeParams struct {
 	UserID string           `json:"user_id"`
 	Type   NotificationType `json:"type"`
-	Limit  int64            `json:"limit"`
-	Offset int64            `json:"offset"`
+	Limit  int32            `json:"limit"`
+	Offset int32            `json:"offset"`
 }
 
 // 按类型获取用户通知 GET /users/me/notifications?type=friend

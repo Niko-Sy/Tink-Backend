@@ -137,8 +137,8 @@ func HandleSearchRoomMembers(c *gin.Context) {
 	members, err := queries.SearchChatroomMembers(c.Request.Context(), sqlcdb.SearchChatroomMembersParams{
 		RoomID:  roomId,
 		Column2: sql.NullString{String: keyword, Valid: true},
-		Limit:   int64(pageSize),
-		Offset:  int64(offset),
+		Limit:   int32(pageSize),
+		Offset:  int32(offset),
 	})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{

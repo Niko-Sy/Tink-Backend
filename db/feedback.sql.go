@@ -334,8 +334,8 @@ LIMIT $1 OFFSET $2
 `
 
 type GetAllFeedbacksParams struct {
-	Limit  int64 `json:"limit"`
-	Offset int64 `json:"offset"`
+	Limit  int32 `json:"limit"`
+	Offset int32 `json:"offset"`
 }
 
 type GetAllFeedbacksRow struct {
@@ -486,8 +486,8 @@ LIMIT $2 OFFSET $3
 
 type GetFeedbacksByStatusParams struct {
 	Status sql.NullString `json:"status"`
-	Limit  int64          `json:"limit"`
-	Offset int64          `json:"offset"`
+	Limit  int32          `json:"limit"`
+	Offset int32          `json:"offset"`
 }
 
 type GetFeedbacksByStatusRow struct {
@@ -559,8 +559,8 @@ LIMIT $2 OFFSET $3
 
 type GetFeedbacksByTypeParams struct {
 	Type   FeedbackType `json:"type"`
-	Limit  int64        `json:"limit"`
-	Offset int64        `json:"offset"`
+	Limit  int32        `json:"limit"`
+	Offset int32        `json:"offset"`
 }
 
 type GetFeedbacksByTypeRow struct {
@@ -629,8 +629,8 @@ LIMIT $2 OFFSET $3
 
 type GetFeedbacksByUserParams struct {
 	UserID sql.NullString `json:"user_id"`
-	Limit  int64          `json:"limit"`
-	Offset int64          `json:"offset"`
+	Limit  int32          `json:"limit"`
+	Offset int32          `json:"offset"`
 }
 
 // 获取用户提交的反馈列表
@@ -688,7 +688,7 @@ type GetMostActiveFeedbackUsersRow struct {
 }
 
 // 获取提交反馈最多的用户
-func (q *Queries) GetMostActiveFeedbackUsers(ctx context.Context, limit int64) ([]GetMostActiveFeedbackUsersRow, error) {
+func (q *Queries) GetMostActiveFeedbackUsers(ctx context.Context, limit int32) ([]GetMostActiveFeedbackUsersRow, error) {
 	rows, err := q.query(ctx, q.getMostActiveFeedbackUsersStmt, getMostActiveFeedbackUsers, limit)
 	if err != nil {
 		return nil, err
@@ -736,8 +736,8 @@ LIMIT $1 OFFSET $2
 `
 
 type GetNewFeedbacksParams struct {
-	Limit  int64 `json:"limit"`
-	Offset int64 `json:"offset"`
+	Limit  int32 `json:"limit"`
+	Offset int32 `json:"offset"`
 }
 
 type GetNewFeedbacksRow struct {
@@ -909,8 +909,8 @@ LIMIT $2 OFFSET $3
 
 type SearchFeedbacksParams struct {
 	Column1 sql.NullString `json:"column_1"`
-	Limit   int64          `json:"limit"`
-	Offset  int64          `json:"offset"`
+	Limit   int32          `json:"limit"`
+	Offset  int32          `json:"offset"`
 }
 
 type SearchFeedbacksRow struct {

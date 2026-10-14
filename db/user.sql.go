@@ -196,8 +196,8 @@ LIMIT $1 OFFSET $2
 `
 
 type GetOnlineUsersParams struct {
-	Limit  int64 `json:"limit"`
-	Offset int64 `json:"offset"`
+	Limit  int32 `json:"limit"`
+	Offset int32 `json:"offset"`
 }
 
 type GetOnlineUsersRow struct {
@@ -514,8 +514,8 @@ LIMIT $2 OFFSET $3
 
 type SearchUsersParams struct {
 	Column1 sql.NullString `json:"column_1"`
-	Limit   int64          `json:"limit"`
-	Offset  int64          `json:"offset"`
+	Limit   int32          `json:"limit"`
+	Offset  int32          `json:"offset"`
 }
 
 type SearchUsersRow struct {

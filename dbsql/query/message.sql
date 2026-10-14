@@ -151,7 +151,7 @@ SELECT
 FROM messages m
 LEFT JOIN users u ON m.sender_id = u.user_id
 WHERE m.room_id = $1 
-    AND m.sent_at < (SELECT sent_at FROM messages WHERE message_id = $2)
+    AND m.sent_at < (SELECT cursor.sent_at FROM messages cursor WHERE cursor.message_id = $2 AND cursor.room_id = m.room_id)
 ORDER BY m.sent_at DESC
 LIMIT $3;
 
@@ -171,7 +171,7 @@ SELECT
 FROM messages m
 LEFT JOIN users u ON m.sender_id = u.user_id
 WHERE m.room_id = $1 
-    AND m.sent_at > (SELECT sent_at FROM messages WHERE message_id = $2)
+    AND m.sent_at > (SELECT cursor.sent_at FROM messages cursor WHERE cursor.message_id = $2 AND cursor.room_id = m.room_id)
 ORDER BY m.sent_at ASC
 LIMIT $3;
 

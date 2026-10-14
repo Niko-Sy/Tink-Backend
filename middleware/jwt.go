@@ -12,16 +12,17 @@ import (
 
 // JWT 配置
 var (
-	JWTSecretKey    = []byte("your-secret-key-change-in-production") // 生产环境应从环境变量读取
-	JWTExpireHours  = 24                                             // Token 过期时间（小时）
-	JWTRefreshHours = 168                                            // Refresh Token 过期时间（7天）
-	JWTIssuer       = "chatroom-backend"
+	JWTSecretKey      = []byte("your-secret-key-change-in-production") // 正常启动从 config.yaml 的 jwt.secret 读取
+	JWTExpireSeconds  = 86400
+	JWTRefreshSeconds = 604800
+	JWTIssuer         = "chatroom-backend"
 )
 
 // CustomClaims 自定义JWT Claims
 type CustomClaims struct {
 	UserID   string `json:"userId"`
 	Username string `json:"username"`
+	Purpose  string `json:"purpose"`
 	jwt.RegisteredClaims
 }
 
@@ -30,8 +31,9 @@ func GenerateToken(userID, username string) (string, error) {
 	claims := CustomClaims{
 		UserID:   userID,
 		Username: username,
+		Purpose:  "access",
 		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Duration(JWTExpireHours) * time.Hour)),
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Duration(JWTExpireSeconds) * time.Second)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 			NotBefore: jwt.NewNumericDate(time.Now()),
 			Issuer:    JWTIssuer,
@@ -48,8 +50,9 @@ func GenerateRefreshToken(userID, username string) (string, error) {
 	claims := CustomClaims{
 		UserID:   userID,
 		Username: username,
+		Purpose:  "refresh",
 		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Duration(JWTRefreshHours) * time.Hour)),
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Duration(JWTRefreshSeconds) * time.Second)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 			NotBefore: jwt.NewNumericDate(time.Now()),
 			Issuer:    JWTIssuer,
@@ -62,28 +65,23 @@ func GenerateRefreshToken(userID, username string) (string, error) {
 }
 
 // ParseToken 解析JWT Token
-func ParseToken(tokenString string) (*CustomClaims, error) {
-	token, err := jwt.ParseWithClaims(tokenString, &CustomClaims{}, func(token *jwt.Token) (interface{}, error) {
-		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, errors.New("无效的签名方法")
-		}
-		return JWTSecretKey, nil
-	})
-
+func ParseToken(raw string) (*CustomClaims, error) { return ParseTokenPurpose(raw, "access") }
+func ParseTokenPurpose(raw, purpose string) (*CustomClaims, error) {
+	token, err := jwt.ParseWithClaims(raw, &CustomClaims{}, func(token *jwt.Token) (interface{}, error) { return JWTSecretKey, nil }, jwt.WithValidMethods([]string{"HS256"}), jwt.WithIssuer(JWTIssuer), jwt.WithExpirationRequired(), jwt.WithIssuedAt())
 	if err != nil {
-		return nil, err
+		return nil, errors.New("无效登录凭据")
 	}
-
-	if claims, ok := token.Claims.(*CustomClaims); ok && token.Valid {
-		return claims, nil
+	claims, ok := token.Claims.(*CustomClaims)
+	if !ok || !token.Valid || claims.Purpose != purpose || claims.UserID == "" || claims.Subject != claims.UserID {
+		return nil, errors.New("无效登录凭据")
 	}
-
-	return nil, errors.New("无效的token")
+	return claims, nil
 }
 
 // JWTAuthMiddleware JWT认证中间件
 func JWTAuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		c.Header("Cache-Control", "no-store")
 		// 从Header获取token
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {
@@ -112,9 +110,19 @@ func JWTAuthMiddleware() gin.HandlerFunc {
 			c.JSON(http.StatusUnauthorized, gin.H{
 				"code":    401,
 				"message": "Token无效或已过期",
-				"error":   err.Error(),
 			})
 			c.Abort()
+			return
+		}
+
+		q, dbErr := GetQueriesFromContext(c)
+		if dbErr != nil {
+			c.AbortWithStatusJSON(503, gin.H{"code": 503, "message": "服务不可用"})
+			return
+		}
+		actor, dbErr := q.SocialProfile(c.Request.Context(), claims.UserID)
+		if dbErr != nil || actor.AccountStatus != "active" {
+			c.AbortWithStatusJSON(403, gin.H{"code": 403, "businessCode": "ACCOUNT_UNAVAILABLE", "message": "账号不可用"})
 			return
 		}
 

@@ -60,6 +60,16 @@ type CreateMessageParams struct {
 	RoomID          string         `json:"room_id"`
 }
 
+type CreateMessageRow struct {
+	MessageID       string         `json:"message_id"`
+	SentAt          time.Time      `json:"sent_at"`
+	Content         string         `json:"content"`
+	MessageType     MessageType    `json:"message_type"`
+	QuotedMessageID sql.NullString `json:"quoted_message_id"`
+	SenderID        sql.NullString `json:"sender_id"`
+	RoomID          string         `json:"room_id"`
+}
+
 // =============================================
 // 消息相关SQL查询 (Message Queries)
 // 对应API: 消息相关接口
@@ -68,7 +78,7 @@ type CreateMessageParams struct {
 // 1. 消息基础操作 (Message CRUD)
 // =============================================
 // 发送消息 POST /chatrooms/:roomId/messages
-func (q *Queries) CreateMessage(ctx context.Context, arg CreateMessageParams) (Message, error) {
+func (q *Queries) CreateMessage(ctx context.Context, arg CreateMessageParams) (CreateMessageRow, error) {
 	row := q.queryRow(ctx, q.createMessageStmt, createMessage,
 		arg.Content,
 		arg.MessageType,
@@ -76,7 +86,7 @@ func (q *Queries) CreateMessage(ctx context.Context, arg CreateMessageParams) (M
 		arg.SenderID,
 		arg.RoomID,
 	)
-	var i Message
+	var i CreateMessageRow
 	err := row.Scan(
 		&i.MessageID,
 		&i.SentAt,
@@ -116,10 +126,20 @@ RETURNING
     room_id
 `
 
+type DeleteMessageSoftRow struct {
+	MessageID       string         `json:"message_id"`
+	SentAt          time.Time      `json:"sent_at"`
+	Content         string         `json:"content"`
+	MessageType     MessageType    `json:"message_type"`
+	QuotedMessageID sql.NullString `json:"quoted_message_id"`
+	SenderID        sql.NullString `json:"sender_id"`
+	RoomID          string         `json:"room_id"`
+}
+
 // 软删除消息（将内容置为系统消息提示）
-func (q *Queries) DeleteMessageSoft(ctx context.Context, messageID string) (Message, error) {
+func (q *Queries) DeleteMessageSoft(ctx context.Context, messageID string) (DeleteMessageSoftRow, error) {
 	row := q.queryRow(ctx, q.deleteMessageSoftStmt, deleteMessageSoft, messageID)
-	var i Message
+	var i DeleteMessageSoftRow
 	err := row.Scan(
 		&i.MessageID,
 		&i.SentAt,
@@ -246,7 +266,7 @@ LIMIT $2
 
 type GetLatestMessagesParams struct {
 	RoomID string `json:"room_id"`
-	Limit  int64  `json:"limit"`
+	Limit  int32  `json:"limit"`
 }
 
 type GetLatestMessagesRow struct {
@@ -310,10 +330,20 @@ FROM messages
 WHERE message_id = $1
 `
 
+type GetMessageByIDRow struct {
+	MessageID       string         `json:"message_id"`
+	SentAt          time.Time      `json:"sent_at"`
+	Content         string         `json:"content"`
+	MessageType     MessageType    `json:"message_type"`
+	QuotedMessageID sql.NullString `json:"quoted_message_id"`
+	SenderID        sql.NullString `json:"sender_id"`
+	RoomID          string         `json:"room_id"`
+}
+
 // 获取单条消息
-func (q *Queries) GetMessageByID(ctx context.Context, messageID string) (Message, error) {
+func (q *Queries) GetMessageByID(ctx context.Context, messageID string) (GetMessageByIDRow, error) {
 	row := q.queryRow(ctx, q.getMessageByIDStmt, getMessageByID, messageID)
-	var i Message
+	var i GetMessageByIDRow
 	err := row.Scan(
 		&i.MessageID,
 		&i.SentAt,
@@ -418,15 +448,15 @@ SELECT
 FROM messages m
 LEFT JOIN users u ON m.sender_id = u.user_id
 WHERE m.room_id = $1 
-    AND m.sent_at > (SELECT sent_at FROM messages WHERE message_id = $2)
+    AND m.sent_at > (SELECT cursor.sent_at FROM messages cursor WHERE cursor.message_id = $2 AND cursor.room_id = m.room_id)
 ORDER BY m.sent_at ASC
 LIMIT $3
 `
 
 type GetMessagesAfterParams struct {
-	Column1 sql.NullString `json:"column_1"`
-	Column2 sql.NullString `json:"column_2"`
-	Column3 sql.NullInt64  `json:"column_3"`
+	RoomID    string `json:"room_id"`
+	MessageID string `json:"message_id"`
+	Limit     int32  `json:"limit"`
 }
 
 type GetMessagesAfterRow struct {
@@ -444,7 +474,7 @@ type GetMessagesAfterRow struct {
 
 // 获取指定消息之后的消息
 func (q *Queries) GetMessagesAfter(ctx context.Context, arg GetMessagesAfterParams) ([]GetMessagesAfterRow, error) {
-	rows, err := q.query(ctx, q.getMessagesAfterStmt, getMessagesAfter, arg.Column1, arg.Column2, arg.Column3)
+	rows, err := q.query(ctx, q.getMessagesAfterStmt, getMessagesAfter, arg.RoomID, arg.MessageID, arg.Limit)
 	if err != nil {
 		return nil, err
 	}
@@ -492,15 +522,15 @@ SELECT
 FROM messages m
 LEFT JOIN users u ON m.sender_id = u.user_id
 WHERE m.room_id = $1 
-    AND m.sent_at < (SELECT sent_at FROM messages WHERE message_id = $2)
+    AND m.sent_at < (SELECT cursor.sent_at FROM messages cursor WHERE cursor.message_id = $2 AND cursor.room_id = m.room_id)
 ORDER BY m.sent_at DESC
 LIMIT $3
 `
 
 type GetMessagesBeforeParams struct {
-	Column1 sql.NullString `json:"column_1"`
-	Column2 sql.NullString `json:"column_2"`
-	Column3 sql.NullInt64  `json:"column_3"`
+	RoomID    string `json:"room_id"`
+	MessageID string `json:"message_id"`
+	Limit     int32  `json:"limit"`
 }
 
 type GetMessagesBeforeRow struct {
@@ -518,7 +548,7 @@ type GetMessagesBeforeRow struct {
 
 // 获取指定消息之前的消息 GET /chatrooms/:roomId/messages?before=M100
 func (q *Queries) GetMessagesBefore(ctx context.Context, arg GetMessagesBeforeParams) ([]GetMessagesBeforeRow, error) {
-	rows, err := q.query(ctx, q.getMessagesBeforeStmt, getMessagesBefore, arg.Column1, arg.Column2, arg.Column3)
+	rows, err := q.query(ctx, q.getMessagesBeforeStmt, getMessagesBefore, arg.RoomID, arg.MessageID, arg.Limit)
 	if err != nil {
 		return nil, err
 	}
@@ -639,8 +669,8 @@ LIMIT $2 OFFSET $3
 
 type GetMessagesByRoomParams struct {
 	RoomID string `json:"room_id"`
-	Limit  int64  `json:"limit"`
-	Offset int64  `json:"offset"`
+	Limit  int32  `json:"limit"`
+	Offset int32  `json:"offset"`
 }
 
 type GetMessagesByRoomRow struct {
@@ -715,8 +745,8 @@ LIMIT $2 OFFSET $3
 
 type GetMessagesByRoomAscParams struct {
 	RoomID string `json:"room_id"`
-	Limit  int64  `json:"limit"`
-	Offset int64  `json:"offset"`
+	Limit  int32  `json:"limit"`
+	Offset int32  `json:"offset"`
 }
 
 type GetMessagesByRoomAscRow struct {
@@ -858,20 +888,30 @@ LIMIT $2 OFFSET $3
 
 type GetMessagesByUserParams struct {
 	SenderID sql.NullString `json:"sender_id"`
-	Limit    int64          `json:"limit"`
-	Offset   int64          `json:"offset"`
+	Limit    int32          `json:"limit"`
+	Offset   int32          `json:"offset"`
+}
+
+type GetMessagesByUserRow struct {
+	MessageID       string         `json:"message_id"`
+	SentAt          time.Time      `json:"sent_at"`
+	Content         string         `json:"content"`
+	MessageType     MessageType    `json:"message_type"`
+	QuotedMessageID sql.NullString `json:"quoted_message_id"`
+	SenderID        sql.NullString `json:"sender_id"`
+	RoomID          string         `json:"room_id"`
 }
 
 // 获取用户发送的消息
-func (q *Queries) GetMessagesByUser(ctx context.Context, arg GetMessagesByUserParams) ([]Message, error) {
+func (q *Queries) GetMessagesByUser(ctx context.Context, arg GetMessagesByUserParams) ([]GetMessagesByUserRow, error) {
 	rows, err := q.query(ctx, q.getMessagesByUserStmt, getMessagesByUser, arg.SenderID, arg.Limit, arg.Offset)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []Message{}
+	items := []GetMessagesByUserRow{}
 	for rows.Next() {
-		var i Message
+		var i GetMessagesByUserRow
 		if err := rows.Scan(
 			&i.MessageID,
 			&i.SentAt,
@@ -912,12 +952,22 @@ LIMIT $3 OFFSET $4
 type GetMessagesByUserInRoomParams struct {
 	SenderID sql.NullString `json:"sender_id"`
 	RoomID   string         `json:"room_id"`
-	Limit    int64          `json:"limit"`
-	Offset   int64          `json:"offset"`
+	Limit    int32          `json:"limit"`
+	Offset   int32          `json:"offset"`
+}
+
+type GetMessagesByUserInRoomRow struct {
+	MessageID       string         `json:"message_id"`
+	SentAt          time.Time      `json:"sent_at"`
+	Content         string         `json:"content"`
+	MessageType     MessageType    `json:"message_type"`
+	QuotedMessageID sql.NullString `json:"quoted_message_id"`
+	SenderID        sql.NullString `json:"sender_id"`
+	RoomID          string         `json:"room_id"`
 }
 
 // 获取用户在指定聊天室发送的消息
-func (q *Queries) GetMessagesByUserInRoom(ctx context.Context, arg GetMessagesByUserInRoomParams) ([]Message, error) {
+func (q *Queries) GetMessagesByUserInRoom(ctx context.Context, arg GetMessagesByUserInRoomParams) ([]GetMessagesByUserInRoomRow, error) {
 	rows, err := q.query(ctx, q.getMessagesByUserInRoomStmt, getMessagesByUserInRoom,
 		arg.SenderID,
 		arg.RoomID,
@@ -928,9 +978,9 @@ func (q *Queries) GetMessagesByUserInRoom(ctx context.Context, arg GetMessagesBy
 		return nil, err
 	}
 	defer rows.Close()
-	items := []Message{}
+	items := []GetMessagesByUserInRoomRow{}
 	for rows.Next() {
-		var i Message
+		var i GetMessagesByUserInRoomRow
 		if err := rows.Scan(
 			&i.MessageID,
 			&i.SentAt,
@@ -1114,7 +1164,7 @@ LIMIT $3
 type GetUnreadMessagesParams struct {
 	UserID string `json:"user_id"`
 	RoomID string `json:"room_id"`
-	Limit  int64  `json:"limit"`
+	Limit  int32  `json:"limit"`
 }
 
 type GetUnreadMessagesRow struct {
@@ -1253,8 +1303,8 @@ LIMIT $3 OFFSET $4
 type SearchMessagesInRoomParams struct {
 	RoomID  string         `json:"room_id"`
 	Column2 sql.NullString `json:"column_2"`
-	Limit   int64          `json:"limit"`
-	Offset  int64          `json:"offset"`
+	Limit   int32          `json:"limit"`
+	Offset  int32          `json:"offset"`
 }
 
 type SearchMessagesInRoomRow struct {
@@ -1334,10 +1384,20 @@ type UpdateMessageParams struct {
 	Content   string `json:"content"`
 }
 
+type UpdateMessageRow struct {
+	MessageID       string         `json:"message_id"`
+	SentAt          time.Time      `json:"sent_at"`
+	Content         string         `json:"content"`
+	MessageType     MessageType    `json:"message_type"`
+	QuotedMessageID sql.NullString `json:"quoted_message_id"`
+	SenderID        sql.NullString `json:"sender_id"`
+	RoomID          string         `json:"room_id"`
+}
+
 // 编辑消息 PUT /chatrooms/:roomId/messages/:messageId
-func (q *Queries) UpdateMessage(ctx context.Context, arg UpdateMessageParams) (Message, error) {
+func (q *Queries) UpdateMessage(ctx context.Context, arg UpdateMessageParams) (UpdateMessageRow, error) {
 	row := q.queryRow(ctx, q.updateMessageStmt, updateMessage, arg.MessageID, arg.Content)
-	var i Message
+	var i UpdateMessageRow
 	err := row.Scan(
 		&i.MessageID,
 		&i.SentAt,

@@ -387,14 +387,14 @@ WHERE is_deleted = false
 `
 
 type GetFileStatsRow struct {
-	TotalCount     int64          `json:"total_count"`
-	AvatarCount    int64          `json:"avatar_count"`
-	ChatImageCount int64          `json:"chat_image_count"`
-	FileCount      int64          `json:"file_count"`
-	TotalSize      sql.NullString `json:"total_size"`
-	AvatarSize     sql.NullString `json:"avatar_size"`
-	ChatImageSize  sql.NullString `json:"chat_image_size"`
-	FileSizeSum    sql.NullString `json:"file_size_sum"`
+	TotalCount     int64       `json:"total_count"`
+	AvatarCount    int64       `json:"avatar_count"`
+	ChatImageCount int64       `json:"chat_image_count"`
+	FileCount      int64       `json:"file_count"`
+	TotalSize      interface{} `json:"total_size"`
+	AvatarSize     interface{} `json:"avatar_size"`
+	ChatImageSize  interface{} `json:"chat_image_size"`
+	FileSizeSum    interface{} `json:"file_size_sum"`
 }
 
 // 获取文件统计（总数、各类型数量、总大小）
@@ -434,8 +434,8 @@ LIMIT $2 OFFSET $3
 
 type GetFilesByContextParams struct {
 	UploadContext UploadedFileType `json:"upload_context"`
-	Limit         int64            `json:"limit"`
-	Offset        int64            `json:"offset"`
+	Limit         int32            `json:"limit"`
+	Offset        int32            `json:"offset"`
 }
 
 // 按上传类型获取文件列表
@@ -493,8 +493,8 @@ LIMIT $2 OFFSET $3
 
 type GetFilesByRoomParams struct {
 	RelatedRoomID sql.NullString `json:"related_room_id"`
-	Limit         int64          `json:"limit"`
-	Offset        int64          `json:"offset"`
+	Limit         int32          `json:"limit"`
+	Offset        int32          `json:"offset"`
 }
 
 // 获取聊天室的文件列表
@@ -552,8 +552,8 @@ LIMIT $2 OFFSET $3
 
 type GetFilesByUploaderParams struct {
 	UploaderID string `json:"uploader_id"`
-	Limit      int64  `json:"limit"`
-	Offset     int64  `json:"offset"`
+	Limit      int32  `json:"limit"`
+	Offset     int32  `json:"offset"`
 }
 
 // 获取用户上传的文件列表
@@ -610,7 +610,7 @@ LIMIT $1
 `
 
 // 获取最大的文件列表
-func (q *Queries) GetLargestFiles(ctx context.Context, limit int64) ([]UploadedFile, error) {
+func (q *Queries) GetLargestFiles(ctx context.Context, limit int32) ([]UploadedFile, error) {
 	rows, err := q.query(ctx, q.getLargestFilesStmt, getLargestFiles, limit)
 	if err != nil {
 		return nil, err
@@ -657,13 +657,13 @@ LIMIT $1
 `
 
 type GetMostActiveUploadersRow struct {
-	UploaderID string         `json:"uploader_id"`
-	FileCount  int64          `json:"file_count"`
-	TotalSize  sql.NullString `json:"total_size"`
+	UploaderID string      `json:"uploader_id"`
+	FileCount  int64       `json:"file_count"`
+	TotalSize  interface{} `json:"total_size"`
 }
 
 // 获取上传文件最多的用户
-func (q *Queries) GetMostActiveUploaders(ctx context.Context, limit int64) ([]GetMostActiveUploadersRow, error) {
+func (q *Queries) GetMostActiveUploaders(ctx context.Context, limit int32) ([]GetMostActiveUploadersRow, error) {
 	rows, err := q.query(ctx, q.getMostActiveUploadersStmt, getMostActiveUploaders, limit)
 	if err != nil {
 		return nil, err
@@ -701,12 +701,12 @@ ORDER BY upload_date DESC
 `
 
 type GetRecentUploadTrendRow struct {
-	UploadDate     time.Time      `json:"upload_date"`
-	Count          int64          `json:"count"`
-	TotalSize      sql.NullString `json:"total_size"`
-	AvatarCount    int64          `json:"avatar_count"`
-	ChatImageCount int64          `json:"chat_image_count"`
-	FileCount      int64          `json:"file_count"`
+	UploadDate     time.Time   `json:"upload_date"`
+	Count          int64       `json:"count"`
+	TotalSize      interface{} `json:"total_size"`
+	AvatarCount    int64       `json:"avatar_count"`
+	ChatImageCount int64       `json:"chat_image_count"`
+	FileCount      int64       `json:"file_count"`
 }
 
 // 获取最近上传趋势（按日期分组）
@@ -747,9 +747,9 @@ WHERE related_room_id = $1 AND is_deleted = false
 `
 
 // 获取聊天室文件占用的存储空间大小
-func (q *Queries) GetRoomStorageSize(ctx context.Context, relatedRoomID sql.NullString) (sql.NullString, error) {
+func (q *Queries) GetRoomStorageSize(ctx context.Context, relatedRoomID sql.NullString) (interface{}, error) {
 	row := q.queryRow(ctx, q.getRoomStorageSizeStmt, getRoomStorageSize, relatedRoomID)
-	var total_size sql.NullString
+	var total_size interface{}
 	err := row.Scan(&total_size)
 	return total_size, err
 }
@@ -761,9 +761,9 @@ WHERE is_deleted = false
 `
 
 // 获取系统总存储空间使用
-func (q *Queries) GetTotalStorageSize(ctx context.Context) (sql.NullString, error) {
+func (q *Queries) GetTotalStorageSize(ctx context.Context) (interface{}, error) {
 	row := q.queryRow(ctx, q.getTotalStorageSizeStmt, getTotalStorageSize)
-	var total_size sql.NullString
+	var total_size interface{}
 	err := row.Scan(&total_size)
 	return total_size, err
 }
@@ -788,8 +788,8 @@ LIMIT $2 OFFSET $3
 
 type GetUserAvatarsParams struct {
 	UploaderID string `json:"uploader_id"`
-	Limit      int64  `json:"limit"`
-	Offset     int64  `json:"offset"`
+	Limit      int32  `json:"limit"`
+	Offset     int32  `json:"offset"`
 }
 
 // 获取用户的头像历史记录
@@ -871,9 +871,9 @@ WHERE uploader_id = $1 AND is_deleted = false
 `
 
 // 获取用户已使用的存储空间大小
-func (q *Queries) GetUserStorageSize(ctx context.Context, uploaderID string) (sql.NullString, error) {
+func (q *Queries) GetUserStorageSize(ctx context.Context, uploaderID string) (interface{}, error) {
 	row := q.queryRow(ctx, q.getUserStorageSizeStmt, getUserStorageSize, uploaderID)
-	var total_size sql.NullString
+	var total_size interface{}
 	err := row.Scan(&total_size)
 	return total_size, err
 }

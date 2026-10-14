@@ -11,6 +11,7 @@ import (
 )
 
 type ChatroomListItem struct {
+	CanInvite         bool                  `json:"canInvite"`
 	RoomId            string                `json:"roomId"`
 	Name              string                `json:"name"`
 	Description       string                `json:"description"`
@@ -86,8 +87,8 @@ func HandleGetUserChatrooms(c *gin.Context) {
 	// 获取用户聊天室列表
 	chatrooms, err := queries.ListUserChatrooms(c.Request.Context(), sqlcdb.ListUserChatroomsParams{
 		UserID: currentUserID,
-		Limit:  int64(pageSize),
-		Offset: int64(offset),
+		Limit:  int32(pageSize),
+		Offset: int32(offset),
 	})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -126,6 +127,7 @@ func HandleGetUserChatrooms(c *gin.Context) {
 		unread := int64(0)
 
 		item := ChatroomListItem{
+			CanInvite:   cr.RoomType == sqlcdb.ChatroomTypePublic || cr.MemberRole == sqlcdb.MemberRoleOwner || cr.MemberRole == sqlcdb.MemberRoleAdmin,
 			RoomId:      cr.RoomID,
 			Name:        cr.RoomName,
 			Description: cr.Description.String,

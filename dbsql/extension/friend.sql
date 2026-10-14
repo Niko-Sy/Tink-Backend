@@ -105,8 +105,8 @@ RETURNING
 
 -- name: CancelFriendRequest :exec
 -- 取消好友请求
-DELETE FROM friend_request 
-WHERE request_id = $1 AND from_user_id = $2 AND status = 'pending';
+UPDATE friend_request SET status='cancelled', handled_at=NOW()
+WHERE request_id = $1 AND from_user_id = $2 AND status='pending';
 
 -- =============================================
 -- 2. 好友请求列表 (Friend Request Lists)
@@ -182,13 +182,13 @@ WHERE to_user_id = $1 AND status = 'pending';
 -- 统计收到的好友请求总数（按状态）
 SELECT COUNT(*) 
 FROM friend_request 
-WHERE to_user_id = $1 AND ($2::text IS NULL OR status = $2::friend_request_status);
+WHERE to_user_id = $1 AND ($2::text IS NULL OR status = $2::text);
 
 -- name: CountSentFriendRequests :one
 -- 统计发送的好友请求总数（按状态）
 SELECT COUNT(*) 
 FROM friend_request 
-WHERE from_user_id = $1 AND ($2::text IS NULL OR status = $2::friend_request_status);
+WHERE from_user_id = $1 AND ($2::text IS NULL OR status = $2::text);
 
 -- =============================================
 -- 3. 好友关系操作 (Friendship Operations)

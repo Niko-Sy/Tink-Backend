@@ -49,8 +49,8 @@ func (q *Queries) AcceptFriendRequest(ctx context.Context, arg AcceptFriendReque
 }
 
 const cancelFriendRequest = `-- name: CancelFriendRequest :exec
-DELETE FROM friend_request 
-WHERE request_id = $1 AND from_user_id = $2 AND status = 'pending'
+UPDATE friend_request SET status='cancelled', handled_at=NOW()
+WHERE request_id = $1 AND from_user_id = $2 AND status='pending'
 `
 
 type CancelFriendRequestParams struct {
@@ -114,7 +114,7 @@ func (q *Queries) CountPendingReceivedRequests(ctx context.Context, toUserID str
 const countReceivedFriendRequests = `-- name: CountReceivedFriendRequests :one
 SELECT COUNT(*) 
 FROM friend_request 
-WHERE to_user_id = $1 AND ($2::text IS NULL OR status = $2::friend_request_status)
+WHERE to_user_id = $1 AND ($2::text IS NULL OR status = $2::text)
 `
 
 type CountReceivedFriendRequestsParams struct {
@@ -133,7 +133,7 @@ func (q *Queries) CountReceivedFriendRequests(ctx context.Context, arg CountRece
 const countSentFriendRequests = `-- name: CountSentFriendRequests :one
 SELECT COUNT(*) 
 FROM friend_request 
-WHERE from_user_id = $1 AND ($2::text IS NULL OR status = $2::friend_request_status)
+WHERE from_user_id = $1 AND ($2::text IS NULL OR status = $2::text)
 `
 
 type CountSentFriendRequestsParams struct {
@@ -229,8 +229,8 @@ ON CONFLICT (user_id_1, user_id_2) DO NOTHING
 `
 
 type CreateFriendshipParams struct {
-	Column1 sql.NullString `json:"column_1"`
-	Column2 sql.NullString `json:"column_2"`
+	Column1 interface{} `json:"column_1"`
+	Column2 interface{} `json:"column_2"`
 }
 
 // =============================================
@@ -250,8 +250,8 @@ WHERE (user_id_1 = CASE WHEN $1 < $2 THEN $1 ELSE $2 END
 `
 
 type DeleteFriendshipParams struct {
-	Column1 sql.NullString `json:"column_1"`
-	Column2 sql.NullString `json:"column_2"`
+	Column1 interface{} `json:"column_1"`
+	Column2 interface{} `json:"column_2"`
 }
 
 // 删除好友关系 DELETE /friends/:userId
@@ -309,12 +309,12 @@ LIMIT $2 OFFSET $3
 
 type GetFriendsParams struct {
 	UserID1 string `json:"user_id_1"`
-	Limit   int64  `json:"limit"`
-	Offset  int64  `json:"offset"`
+	Limit   int32  `json:"limit"`
+	Offset  int32  `json:"offset"`
 }
 
 type GetFriendsRow struct {
-	FriendID     sql.NullString       `json:"friend_id"`
+	FriendID     interface{}          `json:"friend_id"`
 	FriendSince  time.Time            `json:"friend_since"`
 	Username     string               `json:"username"`
 	Nickname     sql.NullString       `json:"nickname"`
@@ -445,12 +445,12 @@ LIMIT $2 OFFSET $3
 
 type GetOnlineFriendsParams struct {
 	UserID1 string `json:"user_id_1"`
-	Limit   int64  `json:"limit"`
-	Offset  int64  `json:"offset"`
+	Limit   int32  `json:"limit"`
+	Offset  int32  `json:"offset"`
 }
 
 type GetOnlineFriendsRow struct {
-	FriendID     sql.NullString       `json:"friend_id"`
+	FriendID     interface{}          `json:"friend_id"`
 	FriendSince  time.Time            `json:"friend_since"`
 	Username     string               `json:"username"`
 	Nickname     sql.NullString       `json:"nickname"`
@@ -513,8 +513,8 @@ LIMIT $2 OFFSET $3
 
 type GetPendingReceivedRequestsParams struct {
 	ToUserID string `json:"to_user_id"`
-	Limit    int64  `json:"limit"`
-	Offset   int64  `json:"offset"`
+	Limit    int32  `json:"limit"`
+	Offset   int32  `json:"offset"`
 }
 
 type GetPendingReceivedRequestsRow struct {
@@ -522,7 +522,7 @@ type GetPendingReceivedRequestsRow struct {
 	FromUserID         string               `json:"from_user_id"`
 	ToUserID           string               `json:"to_user_id"`
 	Message            sql.NullString       `json:"message"`
-	Status             FriendRequestStatus  `json:"status"`
+	Status             string               `json:"status"`
 	Createtime         time.Time            `json:"createtime"`
 	HandledAt          sql.NullTime         `json:"handled_at"`
 	SenderUsername     string               `json:"sender_username"`
@@ -625,8 +625,8 @@ LIMIT $2 OFFSET $3
 
 type GetReceivedFriendRequestsParams struct {
 	ToUserID string `json:"to_user_id"`
-	Limit    int64  `json:"limit"`
-	Offset   int64  `json:"offset"`
+	Limit    int32  `json:"limit"`
+	Offset   int32  `json:"offset"`
 }
 
 type GetReceivedFriendRequestsRow struct {
@@ -634,7 +634,7 @@ type GetReceivedFriendRequestsRow struct {
 	FromUserID         string               `json:"from_user_id"`
 	ToUserID           string               `json:"to_user_id"`
 	Message            sql.NullString       `json:"message"`
-	Status             FriendRequestStatus  `json:"status"`
+	Status             string               `json:"status"`
 	Createtime         time.Time            `json:"createtime"`
 	HandledAt          sql.NullTime         `json:"handled_at"`
 	SenderUsername     string               `json:"sender_username"`
@@ -704,8 +704,8 @@ LIMIT $2 OFFSET $3
 
 type GetSentFriendRequestsParams struct {
 	FromUserID string `json:"from_user_id"`
-	Limit      int64  `json:"limit"`
-	Offset     int64  `json:"offset"`
+	Limit      int32  `json:"limit"`
+	Offset     int32  `json:"offset"`
 }
 
 type GetSentFriendRequestsRow struct {
@@ -713,7 +713,7 @@ type GetSentFriendRequestsRow struct {
 	FromUserID           string               `json:"from_user_id"`
 	ToUserID             string               `json:"to_user_id"`
 	Message              sql.NullString       `json:"message"`
-	Status               FriendRequestStatus  `json:"status"`
+	Status               string               `json:"status"`
 	Createtime           time.Time            `json:"createtime"`
 	HandledAt            sql.NullTime         `json:"handled_at"`
 	ReceiverUsername     string               `json:"receiver_username"`
@@ -767,8 +767,8 @@ SELECT EXISTS(
 `
 
 type IsFriendParams struct {
-	Column1 sql.NullString `json:"column_1"`
-	Column2 sql.NullString `json:"column_2"`
+	Column1 interface{} `json:"column_1"`
+	Column2 interface{} `json:"column_2"`
 }
 
 // 检查是否是好友
@@ -840,12 +840,12 @@ LIMIT $3 OFFSET $4
 type SearchFriendsParams struct {
 	UserID1 string         `json:"user_id_1"`
 	Column2 sql.NullString `json:"column_2"`
-	Limit   int64          `json:"limit"`
-	Offset  int64          `json:"offset"`
+	Limit   int32          `json:"limit"`
+	Offset  int32          `json:"offset"`
 }
 
 type SearchFriendsRow struct {
-	FriendID     sql.NullString       `json:"friend_id"`
+	FriendID     interface{}          `json:"friend_id"`
 	FriendSince  time.Time            `json:"friend_since"`
 	Username     string               `json:"username"`
 	Nickname     sql.NullString       `json:"nickname"`

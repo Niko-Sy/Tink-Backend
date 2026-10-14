@@ -2,13 +2,18 @@ package websocketmsg
 
 import (
 	sqlcdb "chatroombackend/db"
+	"chatroombackend/events"
+	"chatroombackend/internal/telemetry"
 	"chatroombackend/logger"
 	"chatroombackend/middleware"
+	directservice "chatroombackend/service/direct"
+	messagecore "chatroombackend/service/message"
+	socialservice "chatroombackend/service/social"
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"net/http"
 	"sync"
 	"time"
 
@@ -17,191 +22,363 @@ import (
 )
 
 var upgrader = websocket.Upgrader{
-	CheckOrigin: func(r *http.Request) bool {
-		return true // 允许所有来源，生产环境请加强校验
-	},
+	CheckOrigin: middleware.IsAllowedOrigin,
 }
 
 type Client struct {
-	Conn   *websocket.Conn
-	UserID string
-	Send   chan []byte
+	Conn     *websocket.Conn
+	UserID   string
+	Send     chan []byte
+	Done     chan struct{}
+	stopOnce sync.Once
+	Messages *messagecore.Service
+	Rooms    map[string]bool // protected by Hub.RoomsMux
+}
+
+func (c *Client) stop() {
+	c.stopOnce.Do(func() {
+		close(c.Done)
+		if c.Conn != nil {
+			_ = c.Conn.Close()
+		}
+	})
+}
+func (c *Client) enqueue(b []byte) {
+	select {
+	case <-c.Done:
+		return
+	default:
+	}
+	select {
+	case c.Send <- b:
+	case <-c.Done:
+	default:
+		telemetry.Record("hub/queue_overflow")
+		c.stop()
+	}
 }
 
 type Hub struct {
-	Clients    map[string]*Client // userId -> client
+	Clients    map[string]map[*Client]bool
 	ClientsMux sync.RWMutex
-	Rooms      map[string]map[string]bool // roomId -> set of userIds
+	Rooms      map[string]map[string]bool // aggregate unique subscribed users
 	RoomsMux   sync.RWMutex
+	Closing    bool
 }
 
-var hub = &Hub{
-	Clients: make(map[string]*Client),
-	Rooms:   make(map[string]map[string]bool),
-}
-
+var hub = &Hub{Clients: map[string]map[*Client]bool{}, Rooms: map[string]map[string]bool{}}
 var queries *sqlcdb.Queries
 
-// SetQueries 注入 sqlc 生成的 Queries 对象
-func SetQueries(q *sqlcdb.Queries) {
+func SetQueries(q *sqlcdb.Queries) { queries = q }
+func SetRuntime(q *sqlcdb.Queries, database *sql.DB) {
+	if queries == q {
+		return
+	}
 	queries = q
+	// A second developer process must not reset the shared database's room counts.
 }
 
-// WebSocket 消息结构
 type WSMessage struct {
-	Type   string          `json:"type"`
-	Action string          `json:"action,omitempty"`
-	Data   json.RawMessage `json:"data,omitempty"`
+	Type      string          `json:"type"`
+	Action    string          `json:"action,omitempty"`
+	Data      json.RawMessage `json:"data,omitempty"`
+	Timestamp string          `json:"timestamp,omitempty"`
 }
 
-// HandleWebSocket Gin 路由处理函数
-func HandleWebSocket(c *gin.Context) {
-	token := c.Query("token")
-	if token == "" {
-		logger.Warn("WebSocket", "Connection attempt without token")
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "token required"})
+func PublishSocialEvent(ids []string, event events.Event) {
+	if queries == nil {
 		return
 	}
-	// 校验 JWT
-	claims, err := middleware.ParseToken(token)
-	if err != nil {
-		logger.Warn("WebSocket", fmt.Sprintf("Connection attempt with invalid token: %v", err))
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
-		return
+	telemetry.Record(event.Type + "/" + event.Action)
+	if event.Timestamp == "" {
+		event.Timestamp = time.Now().UTC().Format(time.RFC3339Nano)
 	}
-	userId := claims.UserID
-
-	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
-	if err != nil {
-		logger.Error("WebSocket", fmt.Sprintf("Failed to upgrade connection for user %s", userId), err)
-		return
+	data, _ := json.Marshal(event.Data)
+	msg := WSMessage{Type: event.Type, Action: event.Action, Data: data, Timestamp: event.Timestamp}
+	var scope struct {
+		RoomID string `json:"roomId"`
+		Status string `json:"status"`
+		Reason string `json:"reason"`
 	}
-
-	logger.Info("WebSocket", fmt.Sprintf("User %s connected from %s", userId, c.ClientIP()))
-
-	client := &Client{
-		Conn:   conn,
-		UserID: userId,
-		Send:   make(chan []byte, 256),
-	}
-
-	hub.ClientsMux.Lock()
-	hub.Clients[userId] = client
-	hub.ClientsMux.Unlock()
-
-	go client.writePump()
-
-	// 标记为在线并订阅用户加入的房间（断线重连支持）
-	if queries != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-		defer cancel()
-		// 将用户设置为在线
-		if err := queries.SetUserOnline(ctx, userId); err != nil {
-			logger.Error("WebSocket", fmt.Sprintf("Failed to set user %s online", userId), err)
-		} else {
-			logger.Info("WebSocket", fmt.Sprintf("User %s set to online", userId))
+	_ = json.Unmarshal(data, &scope)
+	if event.Type == "invitation" && scope.Status != "" {
+		telemetry.Record("invitation/status/" + scope.Status)
+		if scope.Reason != "" {
+			telemetry.Record("invitation/reason/" + scope.Reason)
 		}
-		// 列出用户的聊天室并加入 hub.rooms
-		rooms, err := queries.ListUserChatrooms(ctx, sqlcdb.ListUserChatroomsParams{UserID: userId, Limit: 1000, Offset: 0})
-		if err == nil {
-			logger.Info("WebSocket", fmt.Sprintf("User %s auto-joining %d rooms", userId, len(rooms)))
-			for _, r := range rooms {
-				hub.joinRoom(userId, r.RoomID)
-				// 尝试增加聊天室在线计数（容错）
-				if err := queries.IncrementChatroomOnlineCount(ctx, r.RoomID); err != nil {
-					logger.Error("WebSocket", fmt.Sprintf("Failed to increment online count for room %s", r.RoomID), err)
+	}
+	for _, id := range ids {
+		hub.ClientsMux.RLock()
+		clients := []*Client{}
+		for c := range hub.Clients[id] {
+			clients = append(clients, c)
+		}
+		hub.ClientsMux.RUnlock()
+		for _, c := range clients {
+			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+			actor, err := queries.SocialProfile(ctx, id)
+			cancel()
+			if err != nil || actor.AccountStatus != "active" {
+				continue
+			}
+			if (event.Type == "direct" || event.Type == "direct/read" || (event.Type == "message" && scope.RoomID != "")) && c.Messages != nil {
+				ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+				err := c.Messages.Direct.Access(ctx, id, scope.RoomID, false)
+				cancel()
+				if err != nil {
+					continue
+				}
+				if event.Type == "direct" && event.Action == "created" {
+					hub.subscribe(c, scope.RoomID)
 				}
 			}
-		} else {
-			logger.Error("WebSocket", fmt.Sprintf("Failed to list rooms for user %s", userId), err)
+			b, _ := json.Marshal(msg)
+			c.enqueue(b)
 		}
 	}
-
-	client.readPump()
-
-	logger.Info("WebSocket", fmt.Sprintf("User %s disconnecting", userId))
-
-	hub.ClientsMux.Lock()
-	delete(hub.Clients, userId)
-	hub.ClientsMux.Unlock()
-
-	// 断开连接，取消所有房间订阅并设置离线
-	if queries != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-		defer cancel()
-		// 将用户设置为离线
-		if err := queries.SetUserOffline(ctx, userId); err != nil {
-			logger.Error("WebSocket", fmt.Sprintf("Failed to set user %s offline", userId), err)
-		} else {
-			logger.Info("WebSocket", fmt.Sprintf("User %s set to offline", userId))
-		}
-		// 从所有房间移除并减少在线计数
-		hub.RoomsMux.Lock()
-		roomCount := 0
-		for roomID := range hub.Rooms {
-			if _, ok := hub.Rooms[roomID][userId]; ok {
-				delete(hub.Rooms[roomID], userId)
-				roomCount++
-				if err := queries.DecrementChatroomOnlineCount(ctx, roomID); err != nil {
-					logger.Error("WebSocket", fmt.Sprintf("Failed to decrement online count for room %s", roomID), err)
-				}
-			}
-		}
-		hub.RoomsMux.Unlock()
-		logger.Info("WebSocket", fmt.Sprintf("User %s removed from %d rooms", userId, roomCount))
-	}
-	_ = conn.Close()
-	logger.Info("WebSocket", fmt.Sprintf("User %s connection closed", userId))
 }
-
-// hub: 加入与广播辅助
-func (h *Hub) joinRoom(userID, roomID string) {
+func HandleWithMessages(core *messagecore.Service, tickets *TicketStore) gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		ctx.Set("messageService", core)
+		ctx.Set("tickets", tickets)
+		HandleWebSocket(ctx)
+	}
+}
+func HandleWebSocket(ctx *gin.Context) {
+	if !middleware.IsAllowedOrigin(ctx.Request) {
+		ctx.AbortWithStatusJSON(403, gin.H{"code": 403, "message": "来源不允许"})
+		return
+	}
+	claims, err := ctx.MustGet("tickets").(*TicketStore).Consume(ctx.Query("ticket"))
+	if err != nil {
+		ctx.JSON(401, gin.H{"code": 401, "message": "无效登录凭证"})
+		return
+	}
+	if queries == nil {
+		ctx.JSON(503, gin.H{"code": 503, "message": "服务不可用"})
+		return
+	}
+	actor, err := queries.SocialProfile(ctx.Request.Context(), claims.UserID)
+	if err != nil || actor.AccountStatus != "active" {
+		ctx.JSON(403, gin.H{"code": 403, "message": "账号不可用"})
+		return
+	}
+	conn, err := upgrader.Upgrade(ctx.Writer, ctx.Request, nil)
+	if err != nil {
+		return
+	}
+	core := ctx.MustGet("messageService").(*messagecore.Service)
+	c := &Client{Messages: core, Conn: conn, UserID: claims.UserID, Send: make(chan []byte, 256), Done: make(chan struct{}), Rooms: map[string]bool{}}
+	hub.ClientsMux.Lock()
+	if hub.Closing {
+		hub.ClientsMux.Unlock()
+		c.stop()
+		return
+	}
+	first := len(hub.Clients[c.UserID]) == 0
+	if first {
+		hub.Clients[c.UserID] = map[*Client]bool{}
+	}
+	hub.Clients[c.UserID][c] = true
+	if first {
+		callCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		_ = queries.SetUserOnline(callCtx, c.UserID)
+		cancel()
+	}
+	hub.ClientsMux.Unlock()
+	go c.writePump()
+	go func() {
+		timer := time.NewTimer(time.Until(claims.ExpiresAt.Time))
+		defer timer.Stop()
+		select {
+		case <-timer.C:
+			c.stop()
+		case <-c.Done:
+		}
+	}()
+	if first {
+		PublishPresence(c.UserID)
+	}
+	callCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	for offset := int32(0); ; offset += 100 {
+		rooms, err := queries.ListUserChatrooms(callCtx, sqlcdb.ListUserChatroomsParams{UserID: c.UserID, Limit: 100, Offset: offset})
+		if err != nil {
+			break
+		}
+		for _, room := range rooms {
+			hub.subscribe(c, room.RoomID)
+		}
+		if len(rooms) < 100 {
+			break
+		}
+	}
+	cancel()
+	// Direct subscriptions are bound to the same immutable router service as the connection.
+	cursor := ""
+	for {
+		list, err := core.Direct.List(ctx.Request.Context(), c.UserID, cursor, 100)
+		if err != nil {
+			break
+		}
+		for _, room := range list.List {
+			hub.subscribe(c, room.RoomID)
+		}
+		if !list.HasMore {
+			break
+		}
+		cursor = list.NextCursor
+	}
+	c.readPump()
+	c.stop()
+	hub.ClientsMux.Lock()
+	delete(hub.Clients[c.UserID], c)
+	last := len(hub.Clients[c.UserID]) == 0
+	hub.RoomsMux.Lock()
+	for room := range c.Rooms {
+		hub.unsubscribeLocked(c, room)
+	}
+	hub.RoomsMux.Unlock()
+	if last {
+		delete(hub.Clients, c.UserID)
+		callCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		_ = queries.SetUserOffline(callCtx, c.UserID)
+		cancel()
+	}
+	hub.ClientsMux.Unlock()
+	if last {
+		PublishPresence(c.UserID)
+	}
+}
+func (h *Hub) subscribe(c *Client, roomID string) {
 	h.RoomsMux.Lock()
 	defer h.RoomsMux.Unlock()
-	set, ok := h.Rooms[roomID]
-	if !ok {
-		set = make(map[string]bool)
-		h.Rooms[roomID] = set
+	select {
+	case <-c.Done:
+		return
+	default:
 	}
-	set[userID] = true
+	if c.Rooms[roomID] {
+		return
+	}
+	c.Rooms[roomID] = true
+	if h.Rooms[roomID] == nil {
+		h.Rooms[roomID] = map[string]bool{}
+	}
+	if !h.Rooms[roomID][c.UserID] {
+		h.Rooms[roomID][c.UserID] = true
+		if queries != nil {
+			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+			_ = queries.IncrementChatroomOnlineCount(ctx, roomID)
+			cancel()
+		}
+	}
 }
 
+// Caller holds ClientsMux and RoomsMux. Never reverse this lock order.
+func (h *Hub) unsubscribeLocked(c *Client, roomID string) {
+	if !c.Rooms[roomID] {
+		return
+	}
+	delete(c.Rooms, roomID)
+	for other := range h.Clients[c.UserID] {
+		if other != c && other.Rooms[roomID] {
+			return
+		}
+	}
+	delete(h.Rooms[roomID], c.UserID)
+	if len(h.Rooms[roomID]) == 0 {
+		delete(h.Rooms, roomID)
+	}
+	if queries != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		_ = queries.DecrementChatroomOnlineCount(ctx, roomID)
+		cancel()
+	}
+}
+func (h *Hub) unsubscribe(c *Client, roomID string) {
+	h.ClientsMux.RLock()
+	defer h.ClientsMux.RUnlock()
+	h.RoomsMux.Lock()
+	defer h.RoomsMux.Unlock()
+	h.unsubscribeLocked(c, roomID)
+}
+
+// Remove all subscriptions when the real membership is revoked.
 func (h *Hub) leaveRoom(userID, roomID string) {
+	h.ClientsMux.RLock()
+	defer h.ClientsMux.RUnlock()
 	h.RoomsMux.Lock()
 	defer h.RoomsMux.Unlock()
-	if set, ok := h.Rooms[roomID]; ok {
-		delete(set, userID)
-		if len(set) == 0 {
-			delete(h.Rooms, roomID)
+	for c := range h.Clients[userID] {
+		h.unsubscribeLocked(c, roomID)
+	}
+}
+func (h *Hub) broadcastRoom(roomID string, msg WSMessage) {
+	if queries == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	_, err := queries.LockFreeGroupRoom(ctx, roomID)
+	if err != nil {
+		return
+	}
+	h.ClientsMux.RLock()
+	h.RoomsMux.RLock()
+	clients := []*Client{}
+	for uid := range h.Rooms[roomID] {
+		for c := range h.Clients[uid] {
+			if c.Rooms[roomID] {
+				clients = append(clients, c)
+			}
+		}
+	}
+	h.RoomsMux.RUnlock()
+	h.ClientsMux.RUnlock()
+	b, _ := json.Marshal(msg)
+	for _, c := range clients {
+		actor, e := queries.SocialProfile(ctx, c.UserID)
+		if e != nil || actor.AccountStatus != "active" {
+			c.stop()
+			continue
+		}
+		active, err := queries.IsUserInChatroom(ctx, sqlcdb.IsUserInChatroomParams{UserID: c.UserID, RoomID: roomID})
+		if err == nil && active {
+			c.enqueue(b)
 		}
 	}
 }
 
-func (h *Hub) broadcastRoom(roomID string, msg WSMessage) {
-	h.RoomsMux.RLock()
-	members, ok := h.Rooms[roomID]
-	h.RoomsMux.RUnlock()
-	if !ok {
+// Presence is private to friends, and every recipient refetches public visibility.
+func PublishPresence(userID string) {
+	if queries == nil {
 		return
 	}
-	b, _ := json.Marshal(msg)
-	for uid := range members {
-		h.ClientsMux.RLock()
-		if client, ok := h.Clients[uid]; ok {
-			select {
-			case client.Send <- b:
-			default:
-				// 如果发送通道阻塞，跳过
-			}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	p, err := queries.SocialProfile(ctx, userID)
+	if err != nil {
+		return
+	}
+	public := socialservice.PublicProfile(p.UserID, p.Username, p.Nickname, p.Avatar, p.Signature, p.AccountStatus, p.OnlineStatus, p.ShowOnlineStatus)
+	for offset := int32(0); ; offset += 100 {
+		friends, err := queries.SocialFriendList(ctx, sqlcdb.SocialFriendListParams{ViewerID: userID, Search: "", StatusFilter: "all", PageLimit: 100, PageOffset: offset})
+		if err != nil {
+			return
 		}
-		h.ClientsMux.RUnlock()
+		for _, f := range friends {
+			PublishSocialEvent([]string{f.UserID}, events.Event{Type: "friend_presence", Action: "updated", Data: public, Timestamp: time.Now().UTC().Format(time.RFC3339Nano)})
+		}
+		if len(friends) < 100 {
+			return
+		}
 	}
 }
 
 func (c *Client) readPump() {
 	defer func() {
 		logger.Debug("WebSocket", fmt.Sprintf("ReadPump ended for user %s", c.UserID))
-		_ = c.Conn.Close()
+		c.stop()
 	}()
 	c.Conn.SetReadLimit(512 * 1024) // Increased to 512KB for media messages
 	_ = c.Conn.SetReadDeadline(time.Now().Add(60 * time.Second))
@@ -229,10 +406,12 @@ func (c *Client) writePump() {
 	defer func() {
 		ticker.Stop()
 		logger.Debug("WebSocket", fmt.Sprintf("WritePump ended for user %s", c.UserID))
-		_ = c.Conn.Close()
+		c.stop()
 	}()
 	for {
 		select {
+		case <-c.Done:
+			return
 		case message, ok := <-c.Send:
 			_ = c.Conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
 			if !ok {
@@ -248,11 +427,6 @@ func (c *Client) writePump() {
 			_, _ = w.Write(message)
 
 			// Add queued messages to the current message
-			n := len(c.Send)
-			for i := 0; i < n; i++ {
-				_, _ = w.Write([]byte{'\n'})
-				_, _ = w.Write(<-c.Send)
-			}
 
 			if err := w.Close(); err != nil {
 				logger.Error("WebSocket", fmt.Sprintf("Failed to close writer for user %s", c.UserID), err)
@@ -284,10 +458,62 @@ func (c *Client) handleMessage(message []byte) {
 	if msg.Type == "ping" {
 		pong := WSMessage{Type: "pong"}
 		b, _ := json.Marshal(pong)
-		c.Send <- b
+		c.enqueue(b)
 		return
 	}
 
+	if msg.Type == "room" || msg.Type == "message" || msg.Type == "typing" {
+		var data struct {
+			RoomID          string `json:"roomId"`
+			ClientMessageID string `json:"clientMessageId"`
+		}
+		if json.Unmarshal(msg.Data, &data) != nil || data.RoomID == "" {
+			c.sendError("invalid_data", "Invalid room")
+			return
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		kind, err := c.Messages.Q.ConversationKind(ctx, data.RoomID)
+		if err != nil {
+			cancel()
+			c.sendError("not_in_room", "Room inaccessible")
+			return
+		}
+		if kind == "direct" {
+			err = c.Messages.Direct.Access(ctx, c.UserID, data.RoomID, false)
+			cancel()
+			if err != nil {
+				c.sendDirectError(err, data.RoomID, data.ClientMessageID)
+				return
+			}
+			switch {
+			case msg.Type == "message" && msg.Action == "send":
+				c.handleSendMessage(msg)
+			case msg.Type == "room" && msg.Action == "join":
+				hub.subscribe(c, data.RoomID)
+				c.respondRoom("joined", data.RoomID)
+			case msg.Type == "room" && msg.Action == "leave":
+				hub.unsubscribe(c, data.RoomID)
+				c.respondRoom("left", data.RoomID)
+			case msg.Type == "message" && msg.Action == "read":
+				var d struct {
+					MessageID string `json:"messageId"`
+				}
+				_ = json.Unmarshal(msg.Data, &d)
+				if _, err = c.Messages.Direct.Read(context.Background(), c.UserID, data.RoomID, d.MessageID); err != nil {
+					c.sendDirectError(err, data.RoomID, "")
+				}
+			default:
+				c.sendError("unsupported_action", "Action unavailable")
+			}
+			return
+		}
+		active, memberErr := c.Messages.Q.IsUserInChatroom(ctx, sqlcdb.IsUserInChatroomParams{UserID: c.UserID, RoomID: data.RoomID})
+		cancel()
+		if memberErr != nil || kind != "group" || !active {
+			c.sendError("not_in_room", "Room inaccessible")
+			return
+		}
+	}
 	// 处理聊天消息发送
 	if msg.Type == "message" && msg.Action == "send" {
 		c.handleSendMessage(msg)
@@ -328,161 +554,44 @@ func (c *Client) handleMessage(message []byte) {
 }
 
 // handleSendMessage 处理发送消息
+func (c *Client) respondRoom(action, room string) {
+	data, _ := json.Marshal(gin.H{"roomId": room, "success": true})
+	b, _ := json.Marshal(WSMessage{Type: "room", Action: action, Data: data})
+	c.enqueue(b)
+}
+func (c *Client) sendDirectError(err error, room, key string) {
+	var e *socialservice.Error
+	if !errors.As(err, &e) {
+		e = socialservice.Failure(500, "INTERNAL_ERROR", "服务暂不可用", nil)
+	}
+	data, _ := json.Marshal(gin.H{"roomId": room, "clientMessageId": key, "code": e.Status, "businessCode": e.Code, "message": e.Message, "details": e.Details})
+	b, _ := json.Marshal(WSMessage{Type: "error", Action: "send_failed", Data: data})
+	c.enqueue(b)
+}
 func (c *Client) handleSendMessage(msg WSMessage) {
-	// 解析 data
-	var d struct {
-		RoomID          string  `json:"roomId"`
-		MessageType     string  `json:"messageType"`
-		Text            string  `json:"text"`
-		QuotedMessageID *string `json:"quotedMessageId,omitempty"`
-		MediaURL        *string `json:"mediaUrl,omitempty"`
+	var input struct {
+		RoomID string `json:"roomId"`
+		Type   string `json:"messageType"`
+		Text   string `json:"text"`
+		Key    string `json:"clientMessageId"`
+		Quote  string `json:"quotedMessageId"`
 	}
-	if err := json.Unmarshal(msg.Data, &d); err != nil {
-		logger.Error("WebSocket", fmt.Sprintf("Failed to parse send message data from user %s", c.UserID), err)
-		c.sendError("invalid_data", "Invalid message data")
+	if json.Unmarshal(msg.Data, &input) != nil {
+		c.sendError("invalid_data", "Invalid message")
 		return
 	}
-
-	logger.Info("WebSocket", fmt.Sprintf("User %s sending message to room %s - Type: %s", c.UserID, d.RoomID, d.MessageType))
-
-	// 必要的 db 依赖
-	if queries == nil {
-		logger.Error("WebSocket", "Database queries not initialized", nil)
-		c.sendError("internal_error", "Database not available")
-		return
-	}
-
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-
-	// 检查用户是否在房间中
-	inRoom, err := queries.IsUserInChatroom(ctx, sqlcdb.IsUserInChatroomParams{UserID: c.UserID, RoomID: d.RoomID})
+	out, err := c.Messages.Send(ctx, c.UserID, input.RoomID, directservice.SendInput{Type: input.Type, Text: input.Text, ClientMessageID: input.Key, QuotedMessageID: input.Quote})
 	if err != nil {
-		logger.Error("WebSocket", fmt.Sprintf("Error checking user %s in room %s", c.UserID, d.RoomID), err)
-		c.sendError("internal_error", "Failed to verify room membership")
+		c.sendDirectError(err, input.RoomID, input.Key)
 		return
 	}
-	if !inRoom {
-		logger.Warn("WebSocket", fmt.Sprintf("User %s not in room %s", c.UserID, d.RoomID))
-		c.sendError("not_in_room", "You are not a member of this room")
-		return
+	if input.Key != "" {
+		data, _ := json.Marshal(out)
+		b, _ := json.Marshal(WSMessage{Type: "message", Action: "ack", Data: data})
+		c.enqueue(b)
 	}
-
-	// 检查是否被禁言（全局或房间）
-	canSend, err := queries.CanUserSendMessageInRoom(ctx, sqlcdb.CanUserSendMessageInRoomParams{MutedUserID: c.UserID, RoomID: d.RoomID})
-	if err != nil {
-		logger.Error("WebSocket", fmt.Sprintf("Error checking mute status for user %s in room %s", c.UserID, d.RoomID), err)
-		c.sendError("internal_error", "Failed to check permissions")
-		return
-	}
-	if !canSend.Valid || !canSend.Bool {
-		logger.Warn("WebSocket", fmt.Sprintf("User %s is muted in room %s", c.UserID, d.RoomID))
-		c.sendError("muted", "You are muted and cannot send messages")
-		return
-	}
-
-	// 构建 CreateMessageParams
-	var quoted sql.NullString
-	if d.QuotedMessageID != nil && *d.QuotedMessageID != "" {
-		quoted = sql.NullString{String: *d.QuotedMessageID, Valid: true}
-	}
-	sender := sql.NullString{String: c.UserID, Valid: true}
-
-	// 验证消息类型
-	mt := sqlcdb.MessageType(d.MessageType)
-	validTypes := []sqlcdb.MessageType{
-		sqlcdb.MessageTypeText,
-		sqlcdb.MessageTypeImage,
-		sqlcdb.MessageTypeFile,
-		sqlcdb.MessageTypeSystemNotification,
-	}
-	isValidType := false
-	for _, vt := range validTypes {
-		if mt == vt {
-			isValidType = true
-			break
-		}
-	}
-	if !isValidType {
-		logger.Warn("WebSocket", fmt.Sprintf("Invalid message type from user %s: %s", c.UserID, d.MessageType))
-		c.sendError("invalid_type", "Invalid message type")
-		return
-	}
-
-	// 对于非文本消息，需要 mediaUrl
-	if mt != sqlcdb.MessageTypeText && mt != sqlcdb.MessageTypeSystemNotification {
-		if d.MediaURL == nil || *d.MediaURL == "" {
-			logger.Warn("WebSocket", fmt.Sprintf("Missing media URL for type %s from user %s", d.MessageType, c.UserID))
-			c.sendError("missing_media", "Media URL required for this message type")
-			return
-		}
-	}
-
-	createParams := sqlcdb.CreateMessageParams{
-		Content:         d.Text,
-		MessageType:     mt,
-		QuotedMessageID: quoted,
-		SenderID:        sender,
-		RoomID:          d.RoomID,
-	}
-
-	// 创建消息
-	m, err := queries.CreateMessage(ctx, createParams)
-	if err != nil {
-		logger.Error("WebSocket", fmt.Sprintf("Failed to create message from user %s in room %s", c.UserID, d.RoomID), err)
-		c.sendError("internal_error", "Failed to create message")
-		return
-	}
-
-	logger.Info("WebSocket", fmt.Sprintf("Message created: %s from user %s in room %s", m.MessageID, c.UserID, d.RoomID))
-
-	// 获取带发送者信息的消息（包含昵称等）
-	mm, err := queries.GetMessageWithSender(ctx, m.MessageID)
-	if err != nil {
-		logger.Error("WebSocket", fmt.Sprintf("Failed to get message with sender for message %s", m.MessageID), err)
-		// 仍然继续，使用基础信息
-	}
-
-	// 组装广播消息
-	out := map[string]interface{}{
-		"messageId": m.MessageID,
-		"roomId":    m.RoomID,
-		"userId":    c.UserID,
-		"type":      string(m.MessageType),
-		"text":      m.Content,
-		"time":      m.SentAt.UTC().Format(time.RFC3339),
-	}
-
-	if err == nil {
-		out["userName"] = chooseDisplayName(mm.Username, mm.Nickname)
-		if mm.AvatarUrl.Valid {
-			out["avatarUrl"] = mm.AvatarUrl.String
-		}
-	}
-
-	if d.QuotedMessageID != nil && *d.QuotedMessageID != "" {
-		out["quotedMessageId"] = *d.QuotedMessageID
-	}
-
-	if d.MediaURL != nil && *d.MediaURL != "" {
-		out["mediaUrl"] = *d.MediaURL
-	}
-
-	outMsg := WSMessage{Type: "message", Action: "new"}
-	b, _ := json.Marshal(out)
-	outMsg.Data = b
-
-	// 更新房间最后活跃时间（异步）
-	go func(roomID string) {
-		ctx := context.Background()
-		if err := queries.UpdateChatroomLastActiveTime(ctx, roomID); err != nil {
-			logger.Error("WebSocket", fmt.Sprintf("Failed to update last active time for room %s", roomID), err)
-		}
-	}(d.RoomID)
-
-	// 广播到房间
-	logger.Info("WebSocket", fmt.Sprintf("Broadcasting message %s to room %s", m.MessageID, d.RoomID))
-	hub.broadcastRoom(d.RoomID, outMsg)
 }
 
 // handleJoinRoom 处理用户加入房间
@@ -519,76 +628,22 @@ func (c *Client) handleJoinRoom(msg WSMessage) {
 		return
 	}
 
-	// 加入房间的 WebSocket 订阅
-	hub.joinRoom(c.UserID, d.RoomID)
-
-	// 增加房间在线计数
-	if err := queries.IncrementChatroomOnlineCount(ctx, d.RoomID); err != nil {
-		logger.Error("WebSocket", fmt.Sprintf("Failed to increment online count for room %s", d.RoomID), err)
-	}
-
-	logger.Info("WebSocket", fmt.Sprintf("User %s successfully joined room %s", c.UserID, d.RoomID))
-
-	// 发送确认消息
-	resp := WSMessage{
-		Type:   "room",
-		Action: "joined",
-		Data:   json.RawMessage(fmt.Sprintf(`{"roomId":"%s","success":true}`, d.RoomID)),
-	}
-	b, _ := json.Marshal(resp)
-	c.Send <- b
-
-	// 广播用户加入消息到房间（可选）
-	joinNotice := WSMessage{
-		Type:   "room_member",
-		Action: "joined",
-		Data:   json.RawMessage(fmt.Sprintf(`{"roomId":"%s","userId":"%s"}`, d.RoomID, c.UserID)),
-	}
-	hub.broadcastRoom(d.RoomID, joinNotice)
+	hub.subscribe(c, d.RoomID)
+	data, _ := json.Marshal(gin.H{"roomId": d.RoomID, "success": true})
+	b, _ := json.Marshal(WSMessage{Type: "room", Action: "joined", Data: data})
+	c.enqueue(b)
 }
-
-// handleLeaveRoom 处理用户离开房间
 func (c *Client) handleLeaveRoom(msg WSMessage) {
 	var d struct {
 		RoomID string `json:"roomId"`
 	}
-	if err := json.Unmarshal(msg.Data, &d); err != nil {
-		logger.Error("WebSocket", fmt.Sprintf("Failed to parse leave room data from user %s", c.UserID), err)
+	if json.Unmarshal(msg.Data, &d) != nil {
 		return
 	}
-
-	logger.Info("WebSocket", fmt.Sprintf("User %s leaving room %s via WebSocket", c.UserID, d.RoomID))
-
-	hub.leaveRoom(c.UserID, d.RoomID)
-
-	if queries != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-		defer cancel()
-
-		// 减少房间在线计数
-		if err := queries.DecrementChatroomOnlineCount(ctx, d.RoomID); err != nil {
-			logger.Error("WebSocket", fmt.Sprintf("Failed to decrement online count for room %s", d.RoomID), err)
-		}
-	}
-
-	logger.Info("WebSocket", fmt.Sprintf("User %s successfully left room %s", c.UserID, d.RoomID))
-
-	// 发送确认消息
-	resp := WSMessage{
-		Type:   "room",
-		Action: "left",
-		Data:   json.RawMessage(fmt.Sprintf(`{"roomId":"%s","success":true}`, d.RoomID)),
-	}
-	b, _ := json.Marshal(resp)
-	c.Send <- b
-
-	// 广播用户离开消息到房间（可选）
-	leaveNotice := WSMessage{
-		Type:   "room_member",
-		Action: "left",
-		Data:   json.RawMessage(fmt.Sprintf(`{"roomId":"%s","userId":"%s"}`, d.RoomID, c.UserID)),
-	}
-	hub.broadcastRoom(d.RoomID, leaveNotice)
+	hub.unsubscribe(c, d.RoomID)
+	data, _ := json.Marshal(gin.H{"roomId": d.RoomID, "success": true})
+	b, _ := json.Marshal(WSMessage{Type: "room", Action: "left", Data: data})
+	c.enqueue(b)
 }
 
 // handleUserStatusUpdate 处理用户状态更新
@@ -630,6 +685,7 @@ func (c *Client) handleUserStatusUpdate(msg WSMessage) {
 
 	logger.Info("WebSocket", fmt.Sprintf("User %s status updated to %s", c.UserID, d.Status))
 
+	PublishPresence(c.UserID)
 	// 广播状态更新到所有相关房间
 	hub.RoomsMux.RLock()
 	userRooms := []string{}
@@ -643,7 +699,7 @@ func (c *Client) handleUserStatusUpdate(msg WSMessage) {
 	statusMsg := WSMessage{
 		Type:   "user_status",
 		Action: "updated",
-		Data:   json.RawMessage(fmt.Sprintf(`{"userId":"%s","status":"%s"}`, c.UserID, d.Status)),
+		Data:   json.RawMessage(fmt.Sprintf(`{"userId":"%s","onlineStatus":"%s"}`, c.UserID, d.Status)),
 	}
 
 	for _, roomID := range userRooms {
@@ -698,7 +754,7 @@ func (c *Client) sendError(action string, message string) {
 		Data:   json.RawMessage(fmt.Sprintf(`{"message":"%s"}`, message)),
 	}
 	b, _ := json.Marshal(errMsg)
-	c.Send <- b
+	c.enqueue(b)
 }
 
 func chooseDisplayName(username sql.NullString, nickname sql.NullString) string {
@@ -712,13 +768,16 @@ func chooseDisplayName(username sql.NullString, nickname sql.NullString) string 
 }
 
 // SendToUser 广播消息给指定用户
-func SendToUser(userId string, msg WSMessage) {
+func SendToUser(userID string, msg WSMessage) {
+	b, _ := json.Marshal(msg)
 	hub.ClientsMux.RLock()
-	client, ok := hub.Clients[userId]
+	clients := []*Client{}
+	for c := range hub.Clients[userID] {
+		clients = append(clients, c)
+	}
 	hub.ClientsMux.RUnlock()
-	if ok {
-		b, _ := json.Marshal(msg)
-		client.Send <- b
+	for _, c := range clients {
+		c.enqueue(b)
 	}
 }
 
@@ -792,25 +851,9 @@ func NotifyRoomMemberChange(roomID, userID, action string) {
 
 // NotifyUserKicked 通知用户被踢出房间
 func NotifyUserKicked(userID, roomID, reason string) {
-	msg := WSMessage{
-		Type:   "room_member",
-		Action: "kicked",
-		Data:   json.RawMessage(fmt.Sprintf(`{"userId":"%s","roomId":"%s","reason":"%s","timestamp":"%s"}`, userID, roomID, reason, time.Now().UTC().Format(time.RFC3339))),
-	}
-	logger.Info("WebSocket", fmt.Sprintf("Notifying user %s kicked from room %s", userID, roomID))
-	SendToUser(userID, msg)
-
-	// Also remove them from the room
+	data, _ := json.Marshal(map[string]any{"userId": userID, "roomId": roomID, "reason": reason})
+	SendToUser(userID, WSMessage{Type: "room_member", Action: "kicked", Data: data})
 	hub.leaveRoom(userID, roomID)
-
-	// Decrease online count if they're connected
-	if queries != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-		defer cancel()
-		if err := queries.DecrementChatroomOnlineCount(ctx, roomID); err != nil {
-			logger.Error("WebSocket", fmt.Sprintf("Failed to decrement online count for room %s", roomID), err)
-		}
-	}
 }
 
 // NotifyUserMuted 通知用户被禁言
@@ -903,4 +946,94 @@ func NullString(s string) sql.NullString {
 		return sql.NullString{Valid: false}
 	}
 	return sql.NullString{String: s, Valid: true}
+}
+
+// MembershipJoined is called only after a real membership write succeeds.
+func MembershipJoined(userID, roomID string) {
+	hub.ClientsMux.RLock()
+	clients := []*Client{}
+	for c := range hub.Clients[userID] {
+		clients = append(clients, c)
+	}
+	hub.ClientsMux.RUnlock()
+	for _, c := range clients {
+		hub.subscribe(c, roomID)
+	}
+	data, _ := json.Marshal(gin.H{"roomId": roomID, "userId": userID})
+	BroadcastToRoom(roomID, WSMessage{Type: "room_member", Action: "joined", Data: data})
+}
+func MembershipLeft(userID, roomID string) {
+	hub.leaveRoom(userID, roomID)
+	data, _ := json.Marshal(gin.H{"roomId": roomID, "userId": userID})
+	BroadcastToRoom(roomID, WSMessage{Type: "room_member", Action: "left", Data: data})
+}
+
+func PublishRoomEvent(room string, event events.Event) {
+	data, _ := json.Marshal(event.Data)
+	BroadcastToRoom(room, WSMessage{Type: event.Type, Action: event.Action, Data: data, Timestamp: event.Timestamp})
+}
+
+// PublishGroupEvent adapts committed domain results to membership subscriptions.
+func PublishGroupEvent(ids []string, e events.Event) {
+	var data struct {
+		RoomID string `json:"roomId"`
+		UserID string `json:"userId"`
+		Reason string `json:"reason"`
+	}
+	b, _ := json.Marshal(e.Data)
+	_ = json.Unmarshal(b, &data)
+	if e.Type == "group_membership" {
+		switch e.Action {
+		case "joined":
+			MembershipJoined(data.UserID, data.RoomID)
+			PublishSocialEvent(ids, events.Event{Type: "room", Action: "added", Data: map[string]any{"roomId": data.RoomID}})
+		case "kicked":
+			NotifyUserKicked(data.UserID, data.RoomID, data.Reason)
+			payload, _ := json.Marshal(map[string]any{"userId": data.UserID, "roomId": data.RoomID})
+			BroadcastToRoom(data.RoomID, WSMessage{Type: "room_member", Action: "kicked", Data: payload})
+			PublishSocialEvent(ids, events.Event{Type: "room", Action: "removed", Data: map[string]any{"roomId": data.RoomID}})
+		case "left":
+			MembershipLeft(data.UserID, data.RoomID)
+			PublishSocialEvent(ids, events.Event{Type: "room", Action: "removed", Data: map[string]any{"roomId": data.RoomID}})
+		case "deleted":
+			for _, id := range ids {
+				hub.leaveRoom(id, data.RoomID)
+			}
+			PublishSocialEvent(ids, events.Event{Type: "room", Action: "removed", Data: map[string]any{"roomId": data.RoomID}})
+		}
+		return
+	}
+	PublishSocialEvent(ids, e)
+}
+
+// Shutdown closes hijacked sockets, which http.Server.Shutdown does not manage.
+// Wait until read pumps release subscriptions/presence before closing the DB.
+func Shutdown(ctx context.Context) error {
+	hub.ClientsMux.Lock()
+	hub.Closing = true
+	clients := []*Client{}
+	for _, set := range hub.Clients {
+		for c := range set {
+			clients = append(clients, c)
+		}
+	}
+	hub.ClientsMux.Unlock()
+	for _, c := range clients {
+		c.stop()
+	}
+	timer := time.NewTicker(20 * time.Millisecond)
+	defer timer.Stop()
+	for {
+		hub.ClientsMux.RLock()
+		n := len(hub.Clients)
+		hub.ClientsMux.RUnlock()
+		if n == 0 {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-timer.C:
+		}
+	}
 }

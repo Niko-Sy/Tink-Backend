@@ -7,9 +7,11 @@ package db
 import (
 	"database/sql"
 	"database/sql/driver"
+	"encoding/json"
 	"fmt"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/sqlc-dev/pqtype"
 )
 
@@ -717,17 +719,31 @@ type AdminLog struct {
 }
 
 type Chatroom struct {
-	RoomID         string         `json:"room_id"`
-	RoomName       string         `json:"room_name"`
-	Description    sql.NullString `json:"description"`
-	IconUrl        sql.NullString `json:"icon_url"`
-	RoomType       ChatroomType   `json:"room_type"`
-	AccessPassword sql.NullString `json:"access_password"`
-	MemberCount    int32          `json:"member_count"`
-	OnlineCount    int32          `json:"online_count"`
-	RoomStatus     ChatroomStatus `json:"room_status"`
-	CreatedAt      time.Time      `json:"created_at"`
-	LastActiveAt   sql.NullTime   `json:"last_active_at"`
+	RoomID           string         `json:"room_id"`
+	RoomName         string         `json:"room_name"`
+	Description      sql.NullString `json:"description"`
+	IconUrl          sql.NullString `json:"icon_url"`
+	RoomType         ChatroomType   `json:"room_type"`
+	AccessPassword   sql.NullString `json:"access_password"`
+	MemberCount      int32          `json:"member_count"`
+	OnlineCount      int32          `json:"online_count"`
+	RoomStatus       ChatroomStatus `json:"room_status"`
+	CreatedAt        time.Time      `json:"created_at"`
+	LastActiveAt     sql.NullTime   `json:"last_active_at"`
+	ConversationKind string         `json:"conversation_kind"`
+}
+
+type ChatroomInvitation struct {
+	InvitationID       uuid.UUID      `json:"invitation_id"`
+	RoomID             string         `json:"room_id"`
+	InviterID          string         `json:"inviter_id"`
+	InviteeID          string         `json:"invitee_id"`
+	Message            string         `json:"message"`
+	Status             string         `json:"status"`
+	CreatedAt          time.Time      `json:"created_at"`
+	ExpiresAt          time.Time      `json:"expires_at"`
+	HandledAt          sql.NullTime   `json:"handled_at"`
+	InvalidationReason sql.NullString `json:"invalidation_reason"`
 }
 
 type ChatroomMember struct {
@@ -741,6 +757,24 @@ type ChatroomMember struct {
 	MuteStatus    MemberMuteStatus `json:"mute_status"`
 	MuteExpiresAt sql.NullTime     `json:"mute_expires_at"`
 	IsActive      bool             `json:"is_active"`
+	LastReadSeq   int64            `json:"last_read_seq"`
+}
+
+type DirectMessageChange struct {
+	RoomID    string    `json:"room_id"`
+	Revision  int64     `json:"revision"`
+	MessageID string    `json:"message_id"`
+	Action    string    `json:"action"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+type DirectPair struct {
+	RoomID         string    `json:"room_id"`
+	UserID1        string    `json:"user_id_1"`
+	UserID2        string    `json:"user_id_2"`
+	CreatedAt      time.Time `json:"created_at"`
+	LastMessageSeq int64     `json:"last_message_seq"`
+	ChangeRevision int64     `json:"change_revision"`
 }
 
 type Feedback struct {
@@ -762,13 +796,20 @@ type Friend struct {
 }
 
 type FriendRequest struct {
-	RequestID  string              `json:"request_id"`
-	FromUserID string              `json:"from_user_id"`
-	ToUserID   string              `json:"to_user_id"`
-	Message    sql.NullString      `json:"message"`
-	Status     FriendRequestStatus `json:"status"`
-	Createtime time.Time           `json:"createtime"`
-	HandledAt  sql.NullTime        `json:"handled_at"`
+	RequestID  string         `json:"request_id"`
+	FromUserID string         `json:"from_user_id"`
+	ToUserID   string         `json:"to_user_id"`
+	Message    sql.NullString `json:"message"`
+	Status     string         `json:"status"`
+	Createtime time.Time      `json:"createtime"`
+	HandledAt  sql.NullTime   `json:"handled_at"`
+}
+
+type FriendRequestMigrationAudit struct {
+	RequestID   string          `json:"request_id"`
+	Reason      string          `json:"reason"`
+	OriginalRow json.RawMessage `json:"original_row"`
+	RecordedAt  time.Time       `json:"recorded_at"`
 }
 
 type GlobalMuteRecord struct {
@@ -789,6 +830,12 @@ type Message struct {
 	QuotedMessageID sql.NullString `json:"quoted_message_id"`
 	SenderID        sql.NullString `json:"sender_id"`
 	RoomID          string         `json:"room_id"`
+	ClientMessageID uuid.NullUUID  `json:"client_message_id"`
+	RequestHash     sql.NullString `json:"request_hash"`
+	DirectSeq       sql.NullInt64  `json:"direct_seq"`
+	EditedAt        sql.NullTime   `json:"edited_at"`
+	DeletedAt       sql.NullTime   `json:"deleted_at"`
+	DirectRevision  sql.NullInt64  `json:"direct_revision"`
 }
 
 type MuteRecord struct {

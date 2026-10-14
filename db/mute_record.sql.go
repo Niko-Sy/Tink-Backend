@@ -382,8 +382,8 @@ LIMIT $1 OFFSET $2
 `
 
 type GetAllActiveGlobalMuteRecordsParams struct {
-	Limit  int64 `json:"limit"`
-	Offset int64 `json:"offset"`
+	Limit  int32 `json:"limit"`
+	Offset int32 `json:"offset"`
 }
 
 type GetAllActiveGlobalMuteRecordsRow struct {
@@ -480,8 +480,8 @@ LIMIT $2 OFFSET $3
 
 type GetGlobalMuteRecordsByUserParams struct {
 	MutedUserID string `json:"muted_user_id"`
-	Limit       int64  `json:"limit"`
-	Offset      int64  `json:"offset"`
+	Limit       int32  `json:"limit"`
+	Offset      int32  `json:"offset"`
 }
 
 // 获取用户的所有全局禁言记录
@@ -587,8 +587,8 @@ LIMIT $2 OFFSET $3
 
 type GetMuteRecordsByMemberParams struct {
 	MemberRelID string `json:"member_rel_id"`
-	Limit       int64  `json:"limit"`
-	Offset      int64  `json:"offset"`
+	Limit       int32  `json:"limit"`
+	Offset      int32  `json:"offset"`
 }
 
 // 获取成员的所有禁言记录
@@ -646,8 +646,8 @@ LIMIT $2 OFFSET $3
 
 type GetMuteRecordsByRoomParams struct {
 	RoomID string `json:"room_id"`
-	Limit  int64  `json:"limit"`
-	Offset int64  `json:"offset"`
+	Limit  int32  `json:"limit"`
+	Offset int32  `json:"offset"`
 }
 
 type GetMuteRecordsByRoomRow struct {
