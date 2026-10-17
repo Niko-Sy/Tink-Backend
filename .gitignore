@@ -12,7 +12,12 @@ logs
 *.exe
 *.dll
 build
-myapp-linux
+myapp_linux
 
 # upload
 uploads
+
+#config
+config.yaml
+webserverconfig.yaml
+*.md
